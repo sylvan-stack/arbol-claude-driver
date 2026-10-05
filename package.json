@@ -1,0 +1,10 @@
+{
+  "name": "@sylvan-stack/arbol-claude-driver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Arbol Claude Driver: the Arbol 2 Driver for Claude.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sylvan-stack/arbol-claude-driver.git"
+  }
+}
