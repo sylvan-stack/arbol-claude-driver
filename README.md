@@ -24,7 +24,7 @@ bin/arbol-claude-driver.mjs info --state-dir /tmp/claude-driver-state
 bin/arbol-claude-driver.mjs dev stand-in /tmp/scenario-folder -- --version
 ```
 
-The stand-in reads `scenario` in that folder: `C31 supported`, `C31 old`, or `C31 missing`. It appends arguments, environment variable names and the real working directory to `received.jsonl`. It currently answers only the version probe. The unit tests use temporary homes and this stand-in, without network or account access.
+The stand-in reads `scenario` in that folder: `C31 supported`, `C31 old`, `C31 missing`, or `C32 info`. It appends arguments, environment variable names and the real working directory to `received.jsonl`. It currently answers only the version probe. The unit tests use temporary homes and this stand-in, without network or account access. The shared runner in `../arbol/conformance/` checks C31 and the `info` portion of C32 through this executable.
 
 The separate `test/probe-info.mjs` script checks the installed tool without sending a prompt. It takes the tool's absolute path and an output-record path, creates a temporary home, runs `info` with a clean environment, and removes the home. Its recorded check is `probe.base-info`; evidence lives in `~/Artifacts/arbol-claude-driver/research/base-info-2026-10-06.json`.
 

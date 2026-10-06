@@ -9,11 +9,15 @@ export const scripts = {
     old: { version: '2.1.288', source: 'Synthetic older version for the C31 boundary check' },
     missing: { version: undefined, source: 'Synthetic absent executable for the C31 boundary check' },
   },
+  C32: {
+    info: { version: '2.1.289', source: '~/Artifacts/arbol-claude-driver/research/base-info-2026-10-06.json' },
+  },
 };
 export async function standIn(folder: string, args: string[]): Promise<number> {
   const [scenario, part = 'supported', ...extra] = (await readFile(join(folder, 'scenario'), 'utf8')).trim().split(/\s+/);
-  if (scenario !== 'C31' || !['supported', 'old', 'missing'].includes(part) || extra.length) throw new Failure('invalid_input', 'This stand-in supports C31 supported, old and missing.');
-  const script = scripts.C31[part as keyof typeof scripts.C31];
+  const known = scenario === 'C31' && ['supported', 'old', 'missing'].includes(part) || scenario === 'C32' && part === 'info';
+  if (extra.length || !known) throw new Failure('invalid_input', 'This stand-in supports C31 supported, old and missing, and C32 info.');
+  const script = scenario === 'C32' ? scripts.C32.info : scripts.C31[part as keyof typeof scripts.C31];
   await appendFile(join(folder, 'received.jsonl'), JSON.stringify({
     scenario, part, arguments: args, environment: Object.keys(process.env).sort(), workingDirectory: process.cwd(),
     toolVersion: script.version ?? null, checks: {},
