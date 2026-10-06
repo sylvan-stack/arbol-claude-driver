@@ -9,11 +9,20 @@ import { inspectTool, requireTool } from './tool.js';
 import { standIn } from './stand-in.js';
 import { Subscriptions, families, familyId } from './subscriptions.js';
 import { Authentication } from './authentication.js';
+import { RunEvents } from './run-events.js';
+import { run } from './run.js';
+import { Runs } from './runs.js';
 export async function main(args: string[]): Promise<number> {
+  const operationWords = args.filter((word, index) => word !== '--state-dir' && !word.startsWith('--state-dir=') && args[index - 1] !== '--state-dir');
+  const isRun = operationWords[0] === 'run';
+  const runEvents = isRun ? new RunEvents(process.stdout, args.includes('--output=text') || args[args.indexOf('--output') + 1] === 'text') : undefined;
+  // A broken caller pipe must reach run cleanup rather than crash the Driver.
+  const outputFailure = (): void => cancellation.abort();
   const cancellation = new AbortController();
   const stop = (): void => cancellation.abort();
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
+  if (runEvents) process.stdout.on('error', outputFailure);
   try {
     if (Number(process.versions.node.split('.')[0]) < 24) throw new Failure('unsupported', 'This Driver needs Node.js 24 or later.');
     const command = parseArguments(args);
@@ -31,6 +40,12 @@ export async function main(args: string[]): Promise<number> {
       const tool = await inspectTool(state, settings.toolPath, process.env, cancellation.signal);
       cancellation.signal.throwIfAborted();
       process.stdout.write(JSON.stringify({ driver: 'claude', ...identity, contract: 1, stateDirectory: state.directory, settingsFile: file, tool, ...(notices.length ? { notices } : {}) }) + '\n');
+      return 0;
+    }
+    if (command.name === 'run') return await run(command, new Subscriptions(state, settings, notices, file), runEvents!, process.env, identity.build, cancellation.signal);
+    if (command.name === 'runs list') {
+      const records = await new Runs(state).list();
+      process.stdout.write(JSON.stringify(records.map(({ runId, subscriptionId, startedAt, labels }) => ({ runId, subscriptionId, startedAt, ...(labels ? { labels } : {}) }))) + '\n');
       return 0;
     }
     if (command.name.startsWith('subscriptions ')) {
@@ -85,11 +100,13 @@ export async function main(args: string[]): Promise<number> {
     if (command.toolRequired) requireTool(await inspectTool(state, settings.toolPath, process.env, cancellation.signal));
     throw new Failure('unsupported', `Command ${command.name} is not implemented in this Driver yet.`);
   } catch (error) {
+    if (runEvents) { try { return await runEvents.finish(error, cancellation.signal.aborted); } catch { return 2; } }
     if (cancellation.signal.aborted) return 2;
     process.stdout.write(JSON.stringify({ error: safeFailure(error) }) + '\n');
     return 1;
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
+    if (runEvents) process.stdout.off('error', outputFailure);
   }
 }
