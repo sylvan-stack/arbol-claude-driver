@@ -1,5 +1,6 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { userInfo } from 'node:os';
 import { Failure, errno } from './errors.js';
 import type { DriverError } from './errors.js';
 import { isObject } from './settings.js';
@@ -129,7 +130,7 @@ export class Subscriptions {
       if (!isObject(progress) || typeof progress.expiresAt !== 'string' || !Number.isFinite(Date.parse(progress.expiresAt))) {
         throw new Failure('internal', 'Malformed sign-in record.');
       }
-      signingIn = await ownerAlive(parseOwner(progress.owner));
+      signingIn = (progress.operation === undefined || progress.operation === 'sign_in') && await ownerAlive(parseOwner(progress.owner));
     }
     const subscription: Subscription = { ...record, settings };
     if (signingIn) { subscription.state = 'signing_in'; delete subscription.problem; }
@@ -158,7 +159,8 @@ export class Subscriptions {
       familySettings(family, this.settings.subscriptions?.[id]?.settings ?? {},
         `${this.settingsFile}: subscriptions.${id}.settings.`, []);
       const created = await this.state.withSubscriptionLock(id, async () => {
-        if (id === 'anthropic' || id === 'zai' || await readJson(join(this.state.subscription(id), 'record.json')) !== undefined) return false;
+        if (id === 'anthropic' || id === 'zai' || await readJson(join(this.state.subscription(id), 'record.json')) !== undefined ||
+          await readJson(join(this.state.subscription(id), 'sign-in.json')) !== undefined) return false;
         const time = new Date().toISOString();
         await privateDirectory(join(this.state.subscription(id), 'home'));
         await writeJson(join(this.state.subscription(id), 'record.json'), { id, family, label,
@@ -192,7 +194,7 @@ export class Subscriptions {
     const subscription = await this.get(id);
     const home = join(this.state.subscription(id), 'home');
     await privateDirectory(home);
-    const env = cleanEnvironment(inherited, home, home);
+    const env = cleanEnvironment(inherited, userInfo().homedir, home);
     if (subscription.family === 'zai') {
       if (!key) throw new Failure('not_signed_in', 'The Subscription has no key.', { remedy: 'Sign in.' });
       env.ANTHROPIC_BASE_URL = subscription.settings.baseUrl as string ?? 'https://api.z.ai/api/anthropic';

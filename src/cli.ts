@@ -8,6 +8,7 @@ import { State, defaultStateDirectory, fixedWait } from './state.js';
 import { inspectTool, requireTool } from './tool.js';
 import { standIn } from './stand-in.js';
 import { Subscriptions, families, familyId } from './subscriptions.js';
+import { Authentication } from './authentication.js';
 export async function main(args: string[]): Promise<number> {
   const cancellation = new AbortController();
   const stop = (): void => cancellation.abort();
@@ -34,6 +35,7 @@ export async function main(args: string[]): Promise<number> {
     }
     if (command.name.startsWith('subscriptions ')) {
       const subscriptions = new Subscriptions(state, settings, notices, file);
+      const authenticate = (): Promise<Authentication> => Authentication.create(subscriptions, process.env, cancellation.signal);
       let result: unknown;
       switch (command.name) {
         case 'subscriptions families': result = families; break;
@@ -43,19 +45,31 @@ export async function main(args: string[]): Promise<number> {
           result = await subscriptions.create(familyId(command.options.family), command.options.label, command.options.id as string | undefined);
           break;
         }
-        case 'subscriptions update': result = await subscriptions.update(command.positionals[0]!, command.options.label as string | undefined); break;
-        case 'subscriptions models': await subscriptions.requireSignedIn(command.positionals[0]!); break;
+        case 'subscriptions update':
+          await (await authenticate()).cleanProgress(command.positionals[0]!);
+          result = await subscriptions.update(command.positionals[0]!, command.options.label as string | undefined); break;
+        case 'subscriptions models':
+          await subscriptions.requireSignedIn(command.positionals[0]!);
+          result = await (await authenticate()).models(command.positionals[0]!); break;
         case 'subscriptions check': {
           const subscription = await subscriptions.get(command.positionals[0]!);
           if (subscription.state === 'signed_out') throw new Failure('not_signed_in', 'Sign in to this Subscription first.', { remedy: 'Sign in.' });
-          break;
+          result = await (await authenticate()).check(command.positionals[0]!); break;
         }
         case 'subscriptions usage': {
           const subscription = await subscriptions.get(command.positionals[0]!);
           if (subscription.state !== 'signed_in') result = { outcome: 'needs_sign_in', message: 'Sign in to this Subscription first.', fetchedAt: new Date().toISOString(), windows: [] };
           else if (subscription.family === 'anthropic') result = subscription.lastUsage ?? { outcome: 'unsupported', message: 'Usage is available after a run reports it.', fetchedAt: new Date().toISOString(), windows: [] };
+          else result = await (await authenticate()).usage(command.positionals[0]!);
           break;
         }
+        case 'subscriptions sign-in': return await (await authenticate()).signIn(command.positionals[0]!, command.options['by-code'] === true,
+          step => { process.stdout.write(JSON.stringify(step) + '\n'); });
+        case 'subscriptions sign-out': result = await (await authenticate()).signOut(command.positionals[0]!, command.options.force === true); break;
+        case 'subscriptions remove': await (await authenticate()).signOut(command.positionals[0]!, command.options.force === true, true); return 0;
+        case 'subscriptions import':
+          if (typeof command.options.from !== 'string') throw new Failure('invalid_input', 'Name the settings file with --from.');
+          result = await (await authenticate()).import(command.positionals[0]!, resolve(command.options.from)); break;
       }
       if (result !== undefined) {
         cancellation.signal.throwIfAborted();

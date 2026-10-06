@@ -25,7 +25,7 @@ export async function gateway(baseUrl: string, path: string, key: string, timeou
     catch { throw new Failure('vendor_unavailable', 'Z.AI returned an unreadable answer.'); }
     if (!response.ok || !isObject(data) || data.success === false || (path.includes('/quota/') && data.success !== true)) {
       const message = isObject(data) ? [data.msg, data.message, data.error].find(value => typeof value === 'string' && value) : undefined;
-      throw new Failure('vendor_unavailable', typeof message === 'string' ? safeText(message.slice(0, 240), [key]) : 'Z.AI could not answer the request.',
+      throw new Failure('vendor_unavailable', typeof message === 'string' ? safeText(message, [key]).slice(0, 240) : 'Z.AI could not answer the request.',
         { detail: { basis: 'fields', vendorStatus: response.status } }, [key]);
     }
     return data;
