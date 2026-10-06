@@ -7,7 +7,7 @@ import { fixedWait, privateDirectory } from './state.js';
 import type { Owner, ProcessEnv } from './types.js';
 const exec = promisify(execFile);
 const quote = (value: string): string => "'" + value.replaceAll("'", "'\\''") + "'";
-const identity = 'stamp=$(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C TZ=UTC /bin/ps -p "$$" -o lstart=)\n';
+const identity = 'umask 077\nstamp=$(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C TZ=UTC /bin/ps -p "$$" -o lstart=)\n';
 export async function runLaunchers(folder: string, env: ProcessEnv): Promise<{ launcher: string; shell: string }> {
   await privateDirectory(folder);
   const realShell = env.SHELL && ['zsh', 'bash'].includes(basename(env.SHELL)) ? env.SHELL : '/bin/zsh';

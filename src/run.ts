@@ -148,7 +148,8 @@ export async function run(command: Command, subscriptions: Subscriptions, events
               gotSettings = true;
               if (request.effort && response.response.applied.effort !== request.effort) throw new Failure('invalid_input', 'Claude did not apply the requested effort.');
               if (typeof response.response.applied.effort === 'string') request.effort = response.response.applied.effort;
-              await send(userRecord(plan.textForm ? { ...request, input: { role: 'user', ...textHistory(request.history, request.input) } } : request)); promptSent = true;
+              if (cancelled || signal.aborted) stop();
+              else { await send(userRecord(plan.textForm ? { ...request, input: { role: 'user', ...textHistory(request.history, request.input) } } : request)); promptSent = true; }
             }
           } else {
             if (plan.resume && !protocol.started && !events.producedOutput && isObject(value) && value.type === 'result' && value.is_error === true &&
@@ -188,7 +189,10 @@ export async function run(command: Command, subscriptions: Subscriptions, events
         kill('SIGKILL');
         try {
           const remaining = await (cleanup ?? endRunGroups(temp, record.tool, stopDeadline));
-          if (remaining.length) await events.emit({ type: 'notice', code: 'cleanup_incomplete', message: 'Could not end process groups: ' + remaining.join(', ') });
+          if (remaining.length) {
+            error ??= new Failure('internal', 'Could not end process groups: ' + remaining.join(', '));
+            await events.emit({ type: 'notice', code: 'cleanup_incomplete', message: 'Could not end process groups: ' + remaining.join(', ') });
+          }
         } catch (failure) { error ??= failure; }
         clearTimeout(deadlineTimer);
       }

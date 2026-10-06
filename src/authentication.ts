@@ -57,6 +57,12 @@ export class Authentication {
       }
     });
   }
+  async cleanAllProgress(): Promise<void> {
+    const entries = await readdir(join(this.subscriptions.state.directory, 'subscriptions'), { withFileTypes: true }).catch(error => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error;
+    });
+    for (const entry of entries) if (entry.isDirectory()) await this.cleanProgress(entry.name);
+  }
   private async reserve(id: string, operation: NonNullable<Progress['operation']>): Promise<Progress> {
     await this.cleanProgress(id);
     const owner = await processOwner(process.pid);

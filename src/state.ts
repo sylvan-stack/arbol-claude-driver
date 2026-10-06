@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { open, readFile, mkdir, chmod, rename, unlink, link, stat } from 'node:fs/promises';
+import { open, readFile, mkdir, chmod, rename, unlink, link, stat, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -92,6 +92,19 @@ export class State {
   subscription(id: string): string {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id)) throw new Failure('invalid_input', 'The Subscription identifier is not a safe file name.');
     return join(this.directory, 'subscriptions', id);
+  }
+  async clearUnfinishedWrites(): Promise<void> {
+    const visit = async (folder: string, depth: number): Promise<void> => {
+      const entries = await readdir(folder, { withFileTypes: true }).catch(error => { if (errno(error, 'ENOENT')) return []; throw error; });
+      for (const entry of entries) {
+        const path = join(folder, entry.name);
+        if (entry.isFile() && entry.name.startsWith('.write-')) {
+          const info = await stat(path).catch(error => { if (errno(error, 'ENOENT')) return undefined; throw error; });
+          if (info && Date.now() - info.mtimeMs > 60000) await unlink(path).catch(error => { if (!errno(error, 'ENOENT')) throw error; });
+        } else if (depth > 0 && entry.isDirectory() && entry.name !== 'home' && entry.name !== 'tmp') await visit(path, depth - 1);
+      }
+    };
+    await visit(this.directory, 3);
   }
   async withSubscriptionLock<T>(id: string, change: () => Promise<T>, env: ProcessEnv = process.env): Promise<T> {
     const directory = this.subscription(id);

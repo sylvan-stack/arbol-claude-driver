@@ -36,7 +36,10 @@ export async function main(args: string[]): Promise<number> {
     await state.initialize();
     const identity = await buildIdentity();
     cancellation.signal.throwIfAborted();
-    if (command.name === 'run' || command.name.startsWith('runs ') || ['subscriptions create', 'subscriptions update', 'subscriptions sign-in', 'subscriptions sign-out', 'subscriptions remove', 'subscriptions import', 'subscriptions check', 'subscriptions usage'].includes(command.name)) await new Runs(state).list();
+    if (command.name === 'run' || command.name.startsWith('runs ') || ['subscriptions create', 'subscriptions update', 'subscriptions sign-in', 'subscriptions sign-out', 'subscriptions remove', 'subscriptions import', 'subscriptions check', 'subscriptions usage'].includes(command.name)) {
+      await state.clearUnfinishedWrites(); await new Runs(state).list();
+      await (await Authentication.create(new Subscriptions(state, settings, notices, file), process.env, cancellation.signal)).cleanAllProgress();
+    }
     if (command.name === 'info') {
       const tool = await inspectTool(state, settings.toolPath, process.env, cancellation.signal);
       cancellation.signal.throwIfAborted();
