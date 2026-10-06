@@ -2,7 +2,7 @@
 
 Arbol Claude Driver: the Arbol 2 Driver for Claude.
 
-The base command-line program is implemented (SYL-75). `info` reads settings, reports the running package and Build, and discovers the installed Claude tool. Subscription operations and runs are the next implementation tasks; their recognised command lines currently return `unsupported`.
+The base command-line program is implemented (SYL-75). `info` reads settings, reports the running package and Build, and discovers the installed Claude tool. The first increment of SYL-78 implements local Subscription records: families, list, create and update. Sign-in, sign-out, removal, import and authenticated vendor operations remain pending, as do runs.
 
 ## Development
 
@@ -21,10 +21,15 @@ Settings are read afresh from `~/.arbol/arbol-claude-driver.json`. `--state-dir 
 
 ```sh
 bin/arbol-claude-driver.mjs info --state-dir /tmp/claude-driver-state
+bin/arbol-claude-driver.mjs subscriptions list
+bin/arbol-claude-driver.mjs subscriptions create --family anthropic --label Work
+bin/arbol-claude-driver.mjs subscriptions update anthropic-2 --label Personal
 bin/arbol-claude-driver.mjs dev stand-in /tmp/scenario-folder -- --version
 ```
 
-The stand-in reads `scenario` in that folder: `C31 supported`, `C31 old`, `C31 missing`, or `C32 info`. It appends arguments, environment variable names and the real working directory to `received.jsonl`. It currently answers only the version probe. The unit tests use temporary homes and this stand-in, without network or account access. The shared runner in `../arbol/conformance/` checks C31 and the `info` portion of C32 through this executable.
+The stand-in reads `scenario` in that folder: `C31 supported`, `C31 old`, `C31 missing`, or `C32 info`. It appends arguments, environment variable names and the real working directory to `received.jsonl`. It currently answers only the version probe. The unit tests use temporary homes, without network or account access. The shared runner in `../arbol/conformance/` checks the local portions of C1 and C40, C31 and the `info` portion of C32 through this executable. C1 and C40 require that local commands and unsigned-account refusals never start a vendor tool, so they need no tool-protocol script yet.
+
+`anthropic` and `zai` are listed from the start. Creating another account takes `--family` and `--label`, with an optional stable `--id`; otherwise its name is `anthropic-2`, `zai-2`, and so on. Each new account has a private tool home and a JSON record, and competing commands reserve distinct identifiers. Updates change only the label given and preserve account details and cached usage. Listing reads settings afresh and contacts no vendor. Unsigned model requests and checks return `not_signed_in`, and unsigned usage returns `needs_sign_in`, before Claude is started.
 
 The separate `test/probe-info.mjs` script checks the installed tool without sending a prompt. It takes the tool's absolute path and an output-record path, creates a temporary home, runs `info` with a clean environment, and removes the home. Its recorded check is `probe.base-info`; evidence lives in `~/Artifacts/arbol-claude-driver/research/base-info-2026-10-06.json`.
 

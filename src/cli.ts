@@ -7,6 +7,7 @@ import { buildIdentity } from './build.js';
 import { State, defaultStateDirectory, fixedWait } from './state.js';
 import { inspectTool, requireTool } from './tool.js';
 import { standIn } from './stand-in.js';
+import { Subscriptions, families, familyId } from './subscriptions.js';
 export async function main(args: string[]): Promise<number> {
   const cancellation = new AbortController();
   const stop = (): void => cancellation.abort();
@@ -30,6 +31,42 @@ export async function main(args: string[]): Promise<number> {
       cancellation.signal.throwIfAborted();
       process.stdout.write(JSON.stringify({ driver: 'claude', ...identity, contract: 1, stateDirectory: state.directory, settingsFile: file, tool, ...(notices.length ? { notices } : {}) }) + '\n');
       return 0;
+    }
+    if (command.name.startsWith('subscriptions ')) {
+      const subscriptions = new Subscriptions(state, settings, notices, file);
+      let result: unknown;
+      switch (command.name) {
+        case 'subscriptions families': result = families; break;
+        case 'subscriptions list': result = await subscriptions.list(); break;
+        case 'subscriptions create': {
+          if (typeof command.options.label !== 'string') throw new Failure('invalid_input', 'Give the new Subscription a label.');
+          result = await subscriptions.create(familyId(command.options.family), command.options.label, command.options.id as string | undefined);
+          break;
+        }
+        case 'subscriptions update': result = await subscriptions.update(command.positionals[0]!, command.options.label as string | undefined); break;
+        case 'subscriptions models': await subscriptions.requireSignedIn(command.positionals[0]!); break;
+        case 'subscriptions check': {
+          const subscription = await subscriptions.get(command.positionals[0]!);
+          if (subscription.state === 'signed_out') throw new Failure('not_signed_in', 'Sign in to this Subscription first.', { remedy: 'Sign in.' });
+          break;
+        }
+        case 'subscriptions usage': {
+          const subscription = await subscriptions.get(command.positionals[0]!);
+          if (subscription.state !== 'signed_in') result = { outcome: 'needs_sign_in', message: 'Sign in to this Subscription first.', fetchedAt: new Date().toISOString(), windows: [] };
+          else if (subscription.family === 'anthropic') result = subscription.lastUsage ?? { outcome: 'unsupported', message: 'Usage is available after a run reports it.', fetchedAt: new Date().toISOString(), windows: [] };
+          break;
+        }
+      }
+      if (result !== undefined) {
+        cancellation.signal.throwIfAborted();
+        // Arrays keep the contract's array shape; item notices describe family faults.
+        if (notices.length && result !== null && typeof result === 'object') {
+          if (Array.isArray(result)) result = result.map(item => ({ ...item, notices }));
+          else result = { ...result, notices };
+        }
+        process.stdout.write(JSON.stringify(result) + '\n');
+        return 0;
+      }
     }
     if (command.toolRequired) requireTool(await inspectTool(state, settings.toolPath, process.env, cancellation.signal));
     throw new Failure('unsupported', `Command ${command.name} is not implemented in this Driver yet.`);
