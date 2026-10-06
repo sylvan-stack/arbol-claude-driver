@@ -2,7 +2,19 @@
 
 Arbol Claude Driver: the Arbol 2 Driver for Claude.
 
-The base command-line program (SYL-75) and Subscription commands (SYL-78) are implemented. `info` reads settings, reports the running package and Build, and discovers the installed Claude tool. Subscriptions support families, list, create, update, sign-in, sign-out, removal, check, usage, models and a one-time z.ai import. Inference runs remain for SYL-80 and its following tasks.
+The base command-line program (SYL-75), Subscription commands (SYL-78), and fresh inference runs (SYL-80) are implemented. `info` reads settings, reports the running package and Build, and discovers the installed Claude tool. Subscriptions support families, list, create, update, sign-in, sign-out, removal, check, usage, models and a one-time z.ai import. `run` accepts request JSON or short options, checks the tool's catalog and applied effort before inference, streams whole blocks and deltas, reports token totals and ends with one final event. `runs list` shows active runs.
+
+```sh
+bin/arbol-claude-driver.mjs run --subscription test-anthropic --model haiku 'Answer with the single word: ready'
+bin/arbol-claude-driver.mjs run --request /tmp/request.json --control
+bin/arbol-claude-driver.mjs run --output text --subscription test-anthropic 'What is 2 + 2?'
+```
+
+Without a request file tools default to off. Without a working folder, the tool runs in a private temporary folder with session persistence off, and the folder is removed before the final event. A run with tools needs an absolute working folder. Command-line fields replace the corresponding JSON fields. `--request -` reads one JSON line from standard input; `--control` keeps the remaining lines for controls. Caller labels are echoed on every event; a malformed or unsupported control line emits `control_refused` while the run continues. `--output text` writes only whole answer blocks.
+
+Every run in this implementation starts fresh. Nonempty history is explicitly refused until SYL-82. Full stopping and shell-process cleanup are SYL-83; questions, background tasks and the owner's skills/MCP setup are SYL-84; the complete error mapping, retry handling, requested time limits and Subscription limit reports are SYL-85. Requested time limits are explicitly refused for now. These later scopes are named in the shared suite's reports.
+
+The run stand-in derives its envelopes from the recorded Claude 2.1.289 run in `test/run-protocol-2026-10-06.json`, with explicitly synthetic text, counts and failure variants. Ten new scenarios and the extended C40 bring the shared suite to 23 scenarios. `test/probe-run.mjs` spends no inference quota and verifies the installed tool's settings handshake; `test/live-run.mjs` uses `test-anthropic` and Haiku for two short messages, one with tools and one without. Both verify that the owner's configuration is unchanged; the live check verifies usage and temporary-folder cleanup. Run them on demand, outside `npm test`.
 
 ## Development
 
