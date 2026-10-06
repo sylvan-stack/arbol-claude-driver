@@ -3,8 +3,25 @@
   "version": "1.0.0",
   "private": true,
   "description": "Arbol Claude Driver: the Arbol 2 Driver for Claude.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "arbol-claude-driver": "bin/arbol-claude-driver.mjs"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "start": "node bin/arbol-claude-driver.mjs"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sylvan-stack/arbol-claude-driver.git"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "typescript": "7.0.2"
   }
 }
