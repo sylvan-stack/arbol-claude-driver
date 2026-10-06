@@ -1,9 +1,11 @@
+import { continuityStandIn } from './continuity-stand-in.js';
 import { readFile, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { subscriptionProtocol } from './subscription-protocol.js';
-export const runScenarios = ['C10', 'C11', 'C12', 'C13', 'C18', 'C19', 'C20', 'C33', 'C40', 'C42', 'C43'];
+export const runScenarios = ['C10', 'C11', 'C12', 'C13', 'C14', 'C18', 'C19', 'C20', 'C33', 'C40', 'C42', 'C43'];
 export async function runStandIn(folder: string, args: string[], scenario: string, part: string): Promise<number> {
+  if (scenario === 'C14') return continuityStandIn(folder, args, part);
   const raw = JSON.parse(await readFile(new URL('../../test/run-protocol-2026-10-06.json', import.meta.url), 'utf8'));
   const output = (record: object): void => { process.stdout.write(JSON.stringify(record) + '\n'); };
   const option = (name: string): string | undefined => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { Failure } from './errors.js';
+import type { HistoryItem } from './history.js';
 import { isObject } from './settings.js';
 import type { DriverSettings } from './settings.js';
 import type { Command } from './arguments.js';
@@ -9,7 +10,7 @@ import type { Command } from './arguments.js';
 export interface Image { mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; data: string }
 export interface RunRequest {
   runId: string; subscriptionId: string; model?: string | undefined; effort?: string | undefined; systemPrompt?: string | undefined;
-  workingDirectory?: string | undefined; additionalDirectories: string[]; history: unknown[];
+  workingDirectory?: string | undefined; additionalDirectories: string[]; history: HistoryItem[];
   input: { role: 'user'; text: string; images?: Image[] }; chatSessionId?: string | undefined;
   tools: 'all' | 'none'; labels?: Record<string, string> | undefined; searchPath: string[];
   limits?: { idleSeconds?: number; totalSeconds?: number } | undefined;
@@ -60,12 +61,24 @@ export async function readRequest(command: Command, settings: DriverSettings, fi
   if (tools !== 'all' && tools !== 'none') bad('The request must name tools as all or none.');
   const history = value.history ?? (file === undefined ? [] : undefined);
   if (!Array.isArray(history)) bad('The request must contain a history array.');
-  if ((history as unknown[]).length) throw new Failure('unsupported', 'Conversation history is not implemented yet (SYL-82).');
+  const validImages = (images: unknown): boolean => images === undefined || Array.isArray(images) && images.every(image => isObject(image) &&
+    ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(image.mediaType as string) && typeof image.data === 'string' &&
+    image.data.length > 0 && image.data.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(image.data));
+  for (const value of history as unknown[]) {
+    if (!isObject(value)) bad('Each history item must be an object.');
+    const item = value as Record<string, unknown>;
+    if (item.type === 'message') {
+      if (!['user', 'assistant'].includes(item.role as string) || typeof item.text !== 'string' || !validImages(item.images) ||
+        item.role === 'assistant' && item.images !== undefined) bad('Invalid history message.');
+    } else if (item.type === 'tool_call') {
+      if (typeof item.name !== 'string' || !item.name || !('input' in item) || typeof item.ok !== 'boolean' ||
+        item.error !== undefined && typeof item.error !== 'string') bad('Invalid history tool call.');
+      if (item.name === 'shell' && (!isObject(item.input) || typeof item.input.command !== 'string')) bad('A shell history call needs a command.');
+    } else bad('Unknown history item type.');
+  }
   if (!isObject(value.input) || value.input.role !== 'user' || typeof value.input.text !== 'string') bad('The input must be a user message with text.');
   const input = value.input as RunRequest['input'];
-  if (input.images !== undefined && (!Array.isArray(input.images) || !input.images.every(image => isObject(image) &&
-    ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(image.mediaType as string) && typeof image.data === 'string' &&
-    image.data.length > 0 && image.data.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(image.data)))) bad('Images must have supported media types and base64 data.');
+  if (!validImages(input.images)) bad('Images must have supported media types and base64 data.');
   const strings = (field: string): string[] => {
     const list = value[field] ?? [];
     if (!Array.isArray(list) || !list.every(item => typeof item === 'string' && isAbsolute(item))) bad(`${field} must contain absolute paths.`);
@@ -84,12 +97,12 @@ export async function readRequest(command: Command, settings: DriverSettings, fi
   if (isObject(value.limits) && Object.keys(value.limits).length) throw new Failure('unsupported', 'Request time limits are not implemented yet (SYL-85).');
   return { runId, subscriptionId, model: value.model as string ?? defaults?.defaultModel,
     effort: value.effort as string ?? defaults?.defaultEffort, systemPrompt: value.systemPrompt as string | undefined,
-    workingDirectory, additionalDirectories, history: history as unknown[], input, chatSessionId: value.chatSessionId as string | undefined,
+    workingDirectory, additionalDirectories, history: history as HistoryItem[], input, chatSessionId: value.chatSessionId as string | undefined,
     tools: tools as 'all' | 'none', labels: value.labels as Record<string, string> | undefined, searchPath, limits: value.limits as RunRequest['limits'] };
 }
-export function runArguments(request: RunRequest, conversation: string, control: boolean): string[] {
+export function runArguments(request: RunRequest, conversation: string, control: boolean, resume = false): string[] {
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
-    '--permission-mode', 'bypassPermissions', '--system-prompt-snapshot', 'off', '--session-id', conversation];
+    '--permission-mode', 'bypassPermissions', '--system-prompt-snapshot', 'off', resume ? '--resume' : '--session-id', conversation];
   if (request.tools === 'none') args.push('--tools', '');
   else if (control) args.push('--permission-prompt-tool', 'stdio');
   if (request.workingDirectory === undefined) args.push('--no-session-persistence');

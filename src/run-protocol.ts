@@ -1,3 +1,4 @@
+import type { Continuity } from './continuity.js';
 import { Failure } from './errors.js';
 import { isObject } from './settings.js';
 import { addUsage, tokenUsage, truncateResult, protocolFailure } from './run-events.js';
@@ -12,7 +13,7 @@ export class RunProtocol {
   private readonly messages = new Map<string, RunUsage>();
   private finalUsage: RunUsage = {};
   constructor(readonly events: RunEvents, readonly request: RunRequest, readonly build: string, readonly version: string,
-    readonly family: string, readonly send: (record: object) => Promise<void>) {}
+    readonly family: string, readonly send: (record: object) => Promise<void>, readonly continuity: Pick<Continuity, 'continuity' | 'rebuildReason' | 'textForm'> = { continuity: 'fresh', textForm: false }) {}
   async accept(value: unknown): Promise<void> {
     if (!isObject(value) || typeof value.type !== 'string') throw protocolFailure();
     const record = value as Record<string, any>;
@@ -22,9 +23,10 @@ export class RunProtocol {
       case 'system':
         if (record.subtype === 'init' && !this.started) {
           this.started = true;
-          await emit({ type: 'started', continuity: 'fresh', subscriptionId: this.request.subscriptionId,
+          await emit({ type: 'started', continuity: this.continuity.continuity, ...(this.continuity.rebuildReason ? { rebuildReason: this.continuity.rebuildReason } : {}), subscriptionId: this.request.subscriptionId,
             ...(typeof record.model === 'string' ? { model: record.model } : {}), ...(this.request.effort ? { effort: this.request.effort } : {}),
             toolVersion: record.claude_code_version ?? this.version, driverBuild: this.build });
+          if (this.continuity.textForm) await emit({ type: 'notice', code: 'history_as_text', message: 'The earlier conversation was sent as labelled text because no native session could be used.' });
         } else if (record.subtype === 'api_retry') await emit({ type: 'notice', code: 'api_retry', message: `Claude is retrying (attempt ${record.attempt ?? record.attempt_number ?? 'unknown'}).` });
         else if (record.subtype === 'background_tasks_changed') {
           if (!Array.isArray(record.tasks)) throw protocolFailure();

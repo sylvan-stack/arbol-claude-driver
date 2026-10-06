@@ -10,6 +10,7 @@ export class RunEvents {
   labels: Record<string, string> | undefined;
   seq = 0;
   finished = false;
+  onText: ((text: string) => void) | undefined;
   producedOutput = false;
   usage: RunUsage = {};
   readonly calls = new Map<string, { name: string; parentCallId?: string }>();
@@ -19,6 +20,7 @@ export class RunEvents {
     const record = { runId: this.runId, seq: ++this.seq, at: new Date().toISOString(), ...(this.labels ? { labels: this.labels } : {}), ...event };
     if ((event.type === 'text' || event.type === 'text_delta' || event.type === 'thinking' || event.type === 'thinking_delta') && event.text) this.producedOutput = true;
     if (event.type === 'tool_started') this.producedOutput = true;
+    if (event.type === 'text' && !event.parentCallId) this.onText?.(String(event.text));
     if (event.type === 'finished') this.finished = true;
     const text = this.textOnly ? event.type === 'text' && !event.parentCallId ? String(event.text) : '' : JSON.stringify(record) + '\n';
     if (text) await new Promise<void>((resolve, reject) => this.output.write(text, error => error ? reject(error) : resolve()));

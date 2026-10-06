@@ -1,3 +1,4 @@
+import { chatKey } from './history.js';
 import { link, readdir, rm, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Failure, errno } from './errors.js';
@@ -6,7 +7,7 @@ import { ownerAlive, parseOwner, prepareFile, processOwner, readJson, writeJson 
 import type { State } from './state.js';
 import type { Owner } from './types.js';
 import type { RunRequest } from './run-request.js';
-export interface RunRecord { runId: string; subscriptionId: string; owner: Owner; startedAt: string; labels?: Record<string, string>; conversation?: string; tool?: Owner }
+export interface RunRecord { runId: string; subscriptionId: string; owner: Owner; startedAt: string; labels?: Record<string, string>; conversation?: string; chatKey?: string; tool?: Owner }
 export class Runs {
   constructor(readonly state: State) {}
   path(id: string): string {
@@ -37,7 +38,7 @@ export class Runs {
     const owner = await processOwner(process.pid);
     if (!owner) throw new Failure('internal', 'Cannot identify the run owner.');
     const record = { runId: request.runId, subscriptionId: request.subscriptionId, owner,
-      startedAt: new Date().toISOString(), ...(request.labels ? { labels: request.labels } : {}), conversation };
+      startedAt: new Date().toISOString(), ...(request.labels ? { labels: request.labels } : {}), conversation, ...(request.chatSessionId ? { chatKey: chatKey(request.chatSessionId) } : {}) };
     const path = this.path(request.runId);
     const temporary = await prepareFile(path, JSON.stringify(record) + '\n');
     try { await link(temporary, path); }
