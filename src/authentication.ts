@@ -11,6 +11,7 @@ import { inspectTool, requireTool } from './tool.js';
 import { fixedWait, ownerAlive, processOwner, parseOwner, privateDirectory, readJson, writeJson } from './state.js';
 import type { Owner, ProcessEnv } from './types.js';
 import { Subscriptions, familySettings, tuningVariables } from './subscriptions.js';
+import { Runs } from './runs.js';
 import type { Subscription, SubscriptionRecord, UsageReport } from './subscriptions.js';
 
 interface Progress { owner: Owner; expiresAt: string; operation?: 'sign_in' | 'sign_out' | 'remove'; stopReason?: 'replaced' | 'signed_out'; tool?: Owner }
@@ -341,24 +342,10 @@ export class Authentication {
     }
   }
   private async runs(id: string, force: boolean): Promise<void> {
-    const folder = join(this.subscriptions.state.directory, 'runs');
-    const files = await readdir(folder).catch(() => [] as string[]);
-    for (const file of files) {
-      const path = join(folder, file); const record = await readJson(path);
-      if (!isObject(record) || record.subscriptionId !== id) continue;
-      const owner = parseOwner(record.owner);
-      if (!(await ownerAlive(owner))) {
-        if (record.tool !== undefined) await this.endOwner(parseOwner(record.tool));
-        if (typeof record.runId === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(record.runId)) await rm(join(this.subscriptions.state.directory, 'tmp', record.runId), { recursive: true, force: true });
-        await rm(path, { force: true }); continue;
-      }
+    const runs = new Runs(this.subscriptions.state);
+    for (const record of (await runs.list()).filter(record => record.subscriptionId === id)) {
       if (!force) throw new Failure('in_use', 'A run is using the Subscription. Stop it first or use --force.');
-      try { process.kill(owner.pid, 'SIGTERM'); } catch { /* gone */ }
-      const deadline = performance.now() + fixedWait(20000);
-      while (await readJson(path) !== undefined) {
-        if (performance.now() >= deadline) throw new Failure('in_use', 'The run did not stop within twenty seconds.');
-        await sleep(fixedWait(50));
-      }
+      await runs.stop(record.runId);
     }
   }
   async signOut(id: string, force: boolean, remove = false): Promise<Subscription | undefined> {

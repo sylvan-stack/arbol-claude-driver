@@ -39,8 +39,9 @@ export class Chats {
     return value as unknown as ChatEntry;
   }
   async reserve(request: RunRequest, runs: Runs, home: string): Promise<{ plan: Continuity; record: RunRecord }> {
+    await runs.list();
     return this.state.withSubscriptionLock(request.subscriptionId, async () => {
-      const active = await runs.list();
+      const active = await runs.list(false);
       const plan: Continuity = { continuity: request.history.length ? 'rebuilt' : 'fresh', conversation: randomUUID(), resume: false, textForm: false };
       if (request.history.length) {
         let reason: RebuildReason | undefined;
@@ -56,7 +57,7 @@ export class Chats {
         if (reason) plan.rebuildReason = reason;
         else { plan.continuity = 'resumed'; plan.resume = true; plan.conversation = entry!.conversation; plan.continuedConversation = entry!.conversation; }
       }
-      const record = await runs.reserve(request, plan.conversation);
+      const record = await runs.reserve(request, plan.conversation, plan.continuedConversation);
       return { plan, record };
     });
   }

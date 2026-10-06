@@ -10,10 +10,12 @@ export class RunEvents {
   labels: Record<string, string> | undefined;
   seq = 0;
   finished = false;
+  private status = 1;
   onText: ((text: string) => void) | undefined;
   producedOutput = false;
   usage: RunUsage = {};
   readonly calls = new Map<string, { name: string; parentCallId?: string }>();
+  readonly asks = new Set<string>();
   constructor(readonly output: Writable = process.stdout, readonly textOnly = false) {}
   async emit(event: EventBody): Promise<void> {
     if (this.finished) return;
@@ -26,16 +28,19 @@ export class RunEvents {
     if (text) await new Promise<void>((resolve, reject) => this.output.write(text, error => error ? reject(error) : resolve()));
   }
   async finish(error?: unknown, cancelled = false): Promise<number> {
-    if (this.finished) return 1;
+    if (this.finished) return cancelled ? 2 : this.status;
     const unfinishedCalls = [...this.calls.keys()];
+    for (const askId of this.asks) await this.emit({ type: 'ask_closed', askId, reason: 'withdrawn' });
+    this.asks.clear();
     for (const [callId, call] of this.calls) await this.emit({ type: 'tool_finished', callId, ok: false,
       error: 'The run ended before the tool call finished.', interrupted: true, ...(call.parentCallId ? { parentCallId: call.parentCallId } : {}) });
     this.calls.clear();
     const failure: DriverError | undefined = cancelled ? undefined : error === undefined ? undefined : safeFailure(error);
+    this.status = cancelled ? 2 : failure ? 1 : 0;
     await this.emit({ type: 'finished', outcome: cancelled ? 'cancelled' : failure ? 'failed' : 'completed',
       ...(failure ? { error: failure } : {}), ...(Object.keys(this.usage).length ? { usage: this.usage } : {}),
       producedOutput: this.producedOutput, unfinishedCalls });
-    return cancelled ? 2 : failure ? 1 : 0;
+    return this.status;
   }
 }
 export function truncateResult(result: unknown): { result: unknown; truncated?: true } {

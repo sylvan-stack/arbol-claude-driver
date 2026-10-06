@@ -9,6 +9,7 @@ import { fixedWait, privateDirectory, processOwner } from './state.js';
 import { inspectTool, requireTool } from './tool.js';
 import { Secrets, keychainService, validateKey } from './secrets.js';
 import { Runs } from './runs.js';
+import { endRunGroups, runLaunchers } from './process-groups.js';
 import { Chats } from './continuity.js';
 import { MessageDigest, textHistory } from './history.js';
 import { readRequest, runArguments, userRecord } from './run-request.js';
@@ -69,27 +70,46 @@ export async function run(command: Command, subscriptions: Subscriptions, events
     const cwd = request.workingDirectory ?? join(temp, 'work');
     if (request.workingDirectory === undefined) await privateDirectory(cwd);
     const childEnv = await subscriptions.environment(subscription.id, env, key);
+    const launchers = await runLaunchers(temp, env);
+    childEnv.CLAUDE_CODE_SHELL = launchers.shell;
     childEnv.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1'; childEnv.BASH_DEFAULT_TIMEOUT_MS = '300000'; childEnv.BASH_MAX_TIMEOUT_MS = '1800000';
     if (request.searchPath.length) childEnv.PATH = (childEnv.PATH ?? '') + delimiter + request.searchPath.join(delimiter);
     await chats.prepare(plan, request, home, cwd);
     for (let attempt = 0; attempt < 2; attempt++) {
-      const child = spawn(tool.path!, runArguments(request, plan.conversation, command.options.control === true, plan.resume), { env: childEnv, cwd, detached: true, stdio: 'pipe' });
+      const child = spawn(launchers.launcher, [tool.path!, ...runArguments(request, plan.conversation, command.options.control === true, plan.resume)], { env: childEnv, cwd, detached: true, stdio: 'pipe' });
       let stderr = '', spawnError = false;
+      let stopDeadline: number | undefined;
+      let cleanup: Promise<number[]> | undefined;
       const kill = (name: NodeJS.Signals): void => { if (child.pid) { try { process.kill(-child.pid, name); } catch { /* gone */ } } };
       const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(resolve => {
         child.on('error', () => { spawnError = true; }); child.on('close', (code, signal) => resolve({ code, signal }));
+      });
+      let exhausted: (() => void) | undefined;
+      const forcedClose = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(resolve => {
+        exhausted = () => resolve({ code: null, signal: 'SIGKILL' });
+      });
+      const boundedClose = (): Promise<{ code: number | null; signal: NodeJS.Signals | null }> => Promise.race([closed, forcedClose]);
+      child.once('exit', () => {
+        kill('SIGKILL');
+        cleanup = endRunGroups(temp, record.tool, stopDeadline);
+        void cleanup.catch(() => {});
       });
       child.stdin.on('error', () => {});
       child.stderr.setEncoding('utf8'); child.stderr.on('data', (text: string) => { stderr = safeText(stderr + text, secrets, 4096); });
       const send = async (record: object): Promise<void> => {
         await new Promise<void>((resolve, reject) => child.stdin.write(JSON.stringify(record) + '\n', error => error ? reject(new Failure('tool_failed', 'Claude input closed.')) : resolve()));
       };
-      const protocol = new RunProtocol(events, request, build, tool.version!, subscription.family, send, plan);
+      const protocol = new RunProtocol(events, request, build, tool.version!, subscription.family, send, plan, command.options.control === true);
       let stopTimer: ReturnType<typeof setTimeout> | undefined;
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+      let interruptId: string | undefined;
       const stop = (): void => {
         cancelled ||= signal.aborted;
-        void send({ type: 'control_request', request_id: randomUUID(), request: { subtype: 'interrupt' } }).catch(() => {});
-        stopTimer ??= setTimeout(() => kill('SIGKILL'), fixedWait(2000));
+        if (interruptId) return;
+        interruptId = randomUUID(); stopDeadline = performance.now() + fixedWait(15000);
+        void send({ type: 'control_request', request_id: interruptId, request: { subtype: 'interrupt' } }).catch(() => {});
+        stopTimer = setTimeout(() => kill('SIGKILL'), fixedWait(2000));
+        deadlineTimer = setTimeout(() => { kill('SIGKILL'); child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy(); exhausted?.(); }, fixedWait(15000));
       };
       stopActive = stop;
       signal.addEventListener('abort', stop, { once: true });
@@ -112,7 +132,10 @@ export async function run(command: Command, subscriptions: Subscriptions, events
           try { value = JSON.parse(line); } catch { throw new Failure('tool_unsupported', 'Claude returned invalid JSON.'); }
           if (isObject(value) && value.type === 'control_response' && isObject(value.response)) {
             const response = value.response as Record<string, any>;
-            if (response.request_id === initializeId) {
+            if (response.request_id === interruptId && (protocol.result || !promptSent)) {
+              toolSettled = true; child.stdin.end();
+              continue;
+            } else if (response.request_id === initializeId) {
               if (initialized || response.subtype !== 'success' || !isObject(response.response) || !Array.isArray(response.response.models)) throw new Failure('tool_unsupported', 'Claude could not report its model catalog.');
               initialized = true;
               const models = response.response.models;
@@ -139,12 +162,12 @@ export async function run(command: Command, subscriptions: Subscriptions, events
             }
           }
           if (protocol.started) clearTimeout(startTimer);
-          if (protocol.result && (!protocol.background || protocol.error)) {
+          if (isObject(value) && value.type === 'result' && protocol.result && (!protocol.background || protocol.error)) {
             toolSettled = true; child.stdin.end(); endTimer = setTimeout(() => kill('SIGKILL'), fixedWait(2000));
             break;
           }
         }
-        const exit = await closed;
+        const exit = await boundedClose();
         resumeRefused ||= plan.resume && !protocol.started && !events.producedOutput && isRefusal(stderr);
         if (!resumeRefused) {
           if (spawnError) throw new Failure('tool_failed', 'Claude could not start.');
@@ -154,7 +177,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
           if (!promptSent && !cancelled) throw new Failure('tool_unsupported', 'Claude did not complete its settings handshake.');
         }
       } catch (failure) {
-        kill('SIGKILL'); await closed;
+        kill('SIGKILL'); await boundedClose();
         if (plan.resume && !protocol.started && !events.producedOutput && isRefusal(stderr)) resumeRefused = true;
         else error ??= failure;
       }
@@ -163,6 +186,11 @@ export async function run(command: Command, subscriptions: Subscriptions, events
         signal.removeEventListener('abort', stop); events.output.off('error', outputError);
         stdout.close(); stopActive = undefined;
         kill('SIGKILL');
+        try {
+          const remaining = await (cleanup ?? endRunGroups(temp, record.tool, stopDeadline));
+          if (remaining.length) await events.emit({ type: 'notice', code: 'cleanup_incomplete', message: 'Could not end process groups: ' + remaining.join(', ') });
+        } catch (failure) { error ??= failure; }
+        clearTimeout(deadlineTimer);
       }
       if (resumeRefused && !error && !cancelled && !signal.aborted && attempt === 0) {
         plan.continuity = 'rebuilt'; plan.rebuildReason ??= 'resume_refused'; plan.conversation = randomUUID();

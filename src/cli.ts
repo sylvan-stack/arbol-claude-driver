@@ -36,6 +36,7 @@ export async function main(args: string[]): Promise<number> {
     await state.initialize();
     const identity = await buildIdentity();
     cancellation.signal.throwIfAborted();
+    if (command.name === 'run' || command.name.startsWith('runs ') || ['subscriptions create', 'subscriptions update', 'subscriptions sign-in', 'subscriptions sign-out', 'subscriptions remove', 'subscriptions import', 'subscriptions check', 'subscriptions usage'].includes(command.name)) await new Runs(state).list();
     if (command.name === 'info') {
       const tool = await inspectTool(state, settings.toolPath, process.env, cancellation.signal);
       cancellation.signal.throwIfAborted();
@@ -48,6 +49,7 @@ export async function main(args: string[]): Promise<number> {
       process.stdout.write(JSON.stringify(records.map(({ runId, subscriptionId, startedAt, labels }) => ({ runId, subscriptionId, startedAt, ...(labels ? { labels } : {}) }))) + '\n');
       return 0;
     }
+    if (command.name === 'runs stop') { await new Runs(state).stop(command.positionals[0]!); return 0; }
     if (command.name.startsWith('subscriptions ')) {
       const subscriptions = new Subscriptions(state, settings, notices, file);
       const authenticate = (): Promise<Authentication> => Authentication.create(subscriptions, process.env, cancellation.signal);

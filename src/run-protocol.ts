@@ -13,7 +13,7 @@ export class RunProtocol {
   private readonly messages = new Map<string, RunUsage>();
   private finalUsage: RunUsage = {};
   constructor(readonly events: RunEvents, readonly request: RunRequest, readonly build: string, readonly version: string,
-    readonly family: string, readonly send: (record: object) => Promise<void>, readonly continuity: Pick<Continuity, 'continuity' | 'rebuildReason' | 'textForm'> = { continuity: 'fresh', textForm: false }) {}
+    readonly family: string, readonly send: (record: object) => Promise<void>, readonly continuity: Pick<Continuity, 'continuity' | 'rebuildReason' | 'textForm'> = { continuity: 'fresh', textForm: false }, readonly control = false) {}
   async accept(value: unknown): Promise<void> {
     if (!isObject(value) || typeof value.type !== 'string') throw protocolFailure();
     const record = value as Record<string, any>;
@@ -30,7 +30,7 @@ export class RunProtocol {
         } else if (record.subtype === 'api_retry') await emit({ type: 'notice', code: 'api_retry', message: `Claude is retrying (attempt ${record.attempt ?? record.attempt_number ?? 'unknown'}).` });
         else if (record.subtype === 'background_tasks_changed') {
           if (!Array.isArray(record.tasks)) throw protocolFailure();
-          this.background = record.tasks.some((task: any) => task.status === 'running' || task.status === 'pending');
+          this.background = record.tasks.length > 0;
         }
         break;
       case 'stream_event': {
@@ -87,6 +87,17 @@ export class RunProtocol {
         break;
       case 'control_request':
         if (typeof record.request_id !== 'string' || !record.request_id || !isObject(record.request)) throw protocolFailure();
+        if (this.control && record.request.subtype === 'can_use_tool' && record.request.tool_name === 'AskUserQuestion') {
+          const input = record.request.input;
+          if (!isObject(input) || !Array.isArray(input.questions) || typeof record.request.tool_use_id !== 'string' || this.events.asks.has(record.request_id)) throw protocolFailure();
+          const questions = input.questions.map((question: any) => {
+            if (!isObject(question) || typeof question.question !== 'string' || !Array.isArray(question.options) || !question.options.every((option: any) => isObject(option) && typeof option.label === 'string')) throw protocolFailure();
+            return { id: question.question, question: question.question, ...(typeof question.header === 'string' ? { header: question.header } : {}), multiple: question.multiSelect === true, options: question.options };
+          });
+          this.events.asks.add(record.request_id);
+          await this.events.emit({ type: 'ask_opened', askId: record.request_id, ask: { callId: record.request.tool_use_id, questions } });
+          break;
+        }
         await this.send({ type: 'control_response', response: { subtype: 'error', request_id: record.request_id,
           error: record.request.subtype === 'can_use_tool' && record.request.tool_name === 'AskUserQuestion'
             ? 'This run has no question handler.' : 'Unknown control request.' } });
@@ -106,7 +117,10 @@ export class RunProtocol {
         else this.error = undefined;
         break;
       }
-      case 'rate_limit_event': case 'control_response': case 'control_cancel_request': break;
+      case 'control_cancel_request':
+        if (this.events.asks.delete(record.request_id)) await this.events.emit({ type: 'ask_closed', askId: record.request_id, reason: 'withdrawn' });
+        break;
+      case 'rate_limit_event': case 'control_response': break;
       default: throw protocolFailure();
     }
   }
