@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import signal
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -17,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads
-from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, require_tool, spawn
+from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
 from .state import State, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
 
 TUNING_VARIABLES = ['API_TIMEOUT_MS', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC']
@@ -630,8 +629,7 @@ class Authentication:
                     private_directory(folder)
                     address = folder / 'address'
                     browser = folder / 'browser'
-                    browser.write_text(f'#!{sys.executable}\nimport os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
-                    browser.chmod(0o700)
+                    python_launcher(browser, f'import os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
                     env = await self.subscriptions.environment(identifier, self.env)
                     child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, env['CLAUDE_CONFIG_DIR'])
                     assert child.stdout and child.stderr and child.stdin

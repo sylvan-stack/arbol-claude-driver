@@ -7,6 +7,7 @@ import pwd
 import re
 import shlex
 import signal
+import sys
 import tempfile
 import time
 from collections.abc import Callable
@@ -18,6 +19,12 @@ from .state import private_directory, ps_time, read_json, write_json
 
 OLDEST_SUPPORTED = '2.1.289'
 ACTUAL_HOME = pwd.getpwuid(os.getuid()).pw_dir
+
+
+def python_launcher(path: Path, code: str, interpreter: str | None = None) -> None:
+    """Exec the selected interpreter even when its packaged path has spaces."""
+    path.write_text('#!/bin/sh\nexec ' + shlex.quote(interpreter or sys.executable) + ' -I -c ' + shlex.quote(code) + ' "$@"\n')
+    path.chmod(0o700)
 
 
 def kill_group(pid: int, name: signal.Signals) -> None:

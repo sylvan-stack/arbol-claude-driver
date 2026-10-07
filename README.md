@@ -16,7 +16,7 @@ bin/arbol-claude-driver info
 
 The source executable directly executes `.venv/bin/python` in isolated mode and reports Build `0`. The shell launcher, `bin/entry.py`, and `src/arbol_claude_driver` also form the packaged CLI; there is no public Python library interface. Neither invocation creates a virtual environment or resolves dependencies.
 
-The 34 offline unit tests cover validated request and error boundaries, the recorded Node 24 history and JSON fingerprints, UTF-16 path encoding, Keychain identity, native history, durable state, concurrent ownership, recovery protection, asynchronous transports and bounded cleanup, sign-in replacement, protocol questions/usage, and failed development-check spending. The shared contract suite adds all 38 CLI scenarios, using this executable's Python stand-in:
+The 35 offline unit tests cover validated request and error boundaries, the recorded Node 24 history and JSON fingerprints, UTF-16 path encoding, Keychain identity, native history, durable state, concurrent ownership, recovery protection, asynchronous transports and bounded cleanup, sign-in replacement, quoted helpers under spaced interpreter paths, protocol questions/usage, and failed development-check spending. The shared contract suite adds all 38 CLI scenarios, using this executable's Python stand-in:
 
 ```sh
 arbol-conformance --driver ./bin/arbol-claude-driver

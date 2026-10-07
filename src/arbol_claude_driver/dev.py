@@ -15,7 +15,7 @@ from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, now, safe_failure, loads
 from .history import encode_folder, session_lines
-from .processes import ACTUAL_HOME, child_command, close_pipes, inspect_tool, kill_group, owner_mcp_arguments, owner_skills, require_tool, spawn, wait_exit
+from .processes import ACTUAL_HOME, child_command, close_pipes, inspect_tool, kill_group, owner_mcp_arguments, owner_skills, python_launcher, require_tool, spawn, wait_exit
 from .protocol import add_usage
 from .state import atomic_write, private_directory, write_json
 from .subscriptions import Subscriptions
@@ -109,8 +109,7 @@ async def probe(subscriptions: Subscriptions, inherited: Env, cancel: asyncio.Ev
             verify(status.get('loggedIn') is True, 'The test Subscription login is unavailable.')
             checks.append({'check': 'probe.signed-subscription', 'outcome': 'passed', 'status': probe_shape(status), 'initialize': probe_shape(await controls(config, BASE, ['initialize']))})
         login_home, address, browser = home('login'), directory / 'address', directory / 'browser'
-        browser.write_text(f'#!{sys.executable}\nimport os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
-        browser.chmod(0o700)
+        python_launcher(browser, f'import os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
         child = await spawn(program, ['auth', 'login', '--claudeai'], {**environment(login_home), 'BROWSER': str(browser)}, login_home)
         assert child.stdout and child.stderr
         readers = [asyncio.create_task(child.stdout.read()), asyncio.create_task(child.stderr.read())]

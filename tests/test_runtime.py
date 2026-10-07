@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import shlex
 import stat
 import sys
 import tempfile
@@ -19,7 +20,7 @@ from arbol_claude_driver.core import Failure, Record, clean_environment, compact
 from arbol_claude_driver.history import MessageDigest, digest, encode_folder, result_text, session_lines  # noqa: E402
 from arbol_claude_driver.dev import live_check  # noqa: E402
 from arbol_claude_driver.models import ValidatedRequest  # noqa: E402
-from arbol_claude_driver.processes import child_command, remaining_groups, supported_version  # noqa: E402
+from arbol_claude_driver.processes import child_command, python_launcher, remaining_groups, supported_version  # noqa: E402
 from arbol_claude_driver.protocol import Output, RunEvents, RunProtocol, run_failure, truncate_result  # noqa: E402
 from arbol_claude_driver.request import read_request, run_arguments  # noqa: E402
 from arbol_claude_driver.state import State, owner_alive, parse_owner, process_owner, read_json, write_json  # noqa: E402
@@ -279,6 +280,18 @@ class StateTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TransportTests(unittest.IsolatedAsyncioTestCase):
+    async def test_generated_python_helper_quotes_spaced_interpreter_and_arguments(self) -> None:
+        with tempfile.TemporaryDirectory(prefix='helper path ') as name:
+            interpreter = Path(name) / "python with space ' quoted"
+            interpreter.symlink_to(sys.executable)
+            helper = Path(name) / 'browser helper'
+            python_launcher(helper, 'import sys;print(repr(sys.argv[1:]))', str(interpreter))
+            arguments = ["argument with ' quote", '$literal\\path', 'https://claude.com/?code=one&state=two']
+            result = await child_command(str(helper), arguments, {'PATH': '/usr/bin:/bin'}, name, 2)
+            self.assertEqual(result['code'], 0)
+            self.assertEqual(result['stdout'], repr(arguments) + '\n')
+            self.assertTrue(helper.read_text().startswith('#!/bin/sh\nexec '))
+
     async def test_child_command_drains_stderr_and_honors_cancel(self) -> None:
         env = {'PATH': '/usr/bin:/bin'}
         result = await child_command(sys.executable, ['-c', 'import sys;sys.stderr.write("x"*300000);print("ok")'], env, '/', 2)
@@ -330,8 +343,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             folder = Path(name)
             counter = folder / 'counter'
             script = folder / 'source'
-            script.write_text(f'#!{sys.executable}\nimport pathlib,os\np=pathlib.Path({str(counter)!r});n=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(n));print(str(n)+"key");assert "ANTHROPIC_AUTH_TOKEN" not in os.environ\n')
-            script.chmod(0o700)
+            python_launcher(script, f'import pathlib,os\np=pathlib.Path({str(counter)!r});n=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(n));print(str(n)+"key");assert "ANTHROPIC_AUTH_TOKEN" not in os.environ\n')
             secrets = Secrets('service', name, {'HOME': name, 'PATH': '/bin', 'ANTHROPIC_AUTH_TOKEN': 'must-not-leak'})
             source = {'from': 'command', 'command': [str(script)]}
             self.assertEqual(await secrets.read('account', source), '1key')
@@ -448,7 +460,7 @@ class CliLifecycleTests(unittest.IsolatedAsyncioTestCase):
             tool = home / 'tool'
             tool.mkdir()
             vendor = tool / 'vendor-tool'
-            vendor.write_text('#!/bin/sh\nexec ' + str(ROOT / 'bin/arbol-claude-driver') + ' dev stand-in ' + str(tool) + ' -- "$@"\n')
+            vendor.write_text('#!/bin/sh\nexec ' + shlex.join([str(ROOT / 'bin/arbol-claude-driver'), 'dev', 'stand-in', str(tool), '--']) + ' "$@"\n')
             vendor.chmod(0o700)
             (home / '.arbol/arbol-claude-driver.json').write_text(compact({'toolPath': str(vendor)}))
             (tool / 'scenario').write_text('C2 waiting\n')
