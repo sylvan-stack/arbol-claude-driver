@@ -103,6 +103,26 @@ class CompatibilityTests(unittest.TestCase):
             Failure('invented', 'bad')
 
     def test_settings_unknown_values_withheld_and_environment_allowlist(self) -> None:
+        invalid: list[Record] = [
+            {'baseUrl': 'ftp://secret-sentinel'},
+            {'baseUrl': 'https://user:secret-sentinel@example.invalid'},
+            {'modelMap': {'haiku': 2}},
+            {'modelMap': []},
+            {'toolEnvironment': {'ANTHROPIC_AUTH_TOKEN': 'secret-sentinel'}},
+            {'toolEnvironment': {'API_TIMEOUT_MS': 12}},
+            {'baseUrl': 'http://[invalid'},
+            {'baseUrl': 'http://example.invalid:bad'},
+            {'baseUrl': 'http://example.invalid:65536'},
+        ]
+        for index, value in enumerate(invalid):
+            with self.subTest(invalid=index), self.assertRaises(Failure) as caught:
+                family_settings('zai', value, 'settings.', [])
+            self.assertEqual(caught.exception.result['code'], 'invalid_input')
+            self.assertNotIn('secret-sentinel', compact(caught.exception.result))
+        for base_url in ('http://127.0.0.1:8080/custom', 'https://example.invalid:8443/gateway?mode=test', 'http://[::1]:65535/route'):
+            with self.subTest(valid=base_url):
+                value = {'baseUrl': base_url, 'modelMap': {'haiku': 'custom-small'}, 'toolEnvironment': {'API_TIMEOUT_MS': '456'}}
+                self.assertEqual(family_settings('zai', value, 'settings.', []), value)
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / 'settings.json'
             file.write_text('{"unknown":"secret-value","subscriptions":{"zai":{"settings":{"extra":"secret-value"}}}}')

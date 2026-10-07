@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads
 from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
@@ -38,7 +38,7 @@ def family_id(value: Any) -> str:
 
 
 def family_settings(family: str, value: Record, prefix: str, notices: list[Record]) -> Record:
-    def fail(field: str) -> None:
+    def fail(field: str) -> NoReturn:
         raise Failure('invalid_input', f'Invalid setting {prefix}{field}.')
 
     def unknown(field: str) -> None:
@@ -55,8 +55,13 @@ def family_settings(family: str, value: Record, prefix: str, notices: list[Recor
     if 'baseUrl' in value:
         if not isinstance(value['baseUrl'], str):
             fail('baseUrl')
-        url = urllib.parse.urlparse(value['baseUrl'])
-        if url.scheme not in {'http', 'https'} or not url.hostname or url.username or url.password:
+        try:
+            url = urllib.parse.urlparse(value['baseUrl'])
+            # urllib validates bracketed hosts while parsing, and ports on access.
+            _ = url.port
+            if url.scheme not in {'http', 'https'} or not url.hostname or url.username or url.password:
+                fail('baseUrl')
+        except ValueError:
             fail('baseUrl')
         settings['baseUrl'] = value['baseUrl']
     for key, allowed in [('modelMap', MODEL_NAMES), ('toolEnvironment', TUNING_VARIABLES)]:
