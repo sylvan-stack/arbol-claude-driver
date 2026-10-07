@@ -4,18 +4,23 @@ import { isObject } from './settings.js';
 import { addUsage, tokenUsage, truncateResult, protocolFailure } from './run-events.js';
 import type { RunEvents, RunUsage } from './run-events.js';
 import type { RunRequest } from './run-request.js';
+import { limitReport, runFailure } from './run-errors.js';
+import type { UsageReport } from './subscriptions.js';
 
 export class RunProtocol {
   started = false;
   result?: Record<string, any>;
   error: Failure | undefined;
   background = false;
+  lastUsage: UsageReport | undefined;
+  private assistantError: Record<string, any> | undefined;
   private readonly messages = new Map<string, RunUsage>();
   private finalUsage: RunUsage = {};
   private readonly questions = new Map<string, { input: Record<string, unknown>; questions: Array<{ id: string; multiple: boolean; options: Array<{ label: string }> }> }>();
   private readonly answered = new Set<string>();
   constructor(readonly events: RunEvents, readonly request: RunRequest, readonly build: string, readonly version: string,
-    readonly family: string, readonly send: (record: object) => Promise<void>, readonly continuity: Pick<Continuity, 'continuity' | 'rebuildReason' | 'textForm'> = { continuity: 'fresh', textForm: false }, readonly control = false) {}
+    readonly family: string, readonly send: (record: object) => Promise<void>, readonly continuity: Pick<Continuity, 'continuity' | 'rebuildReason' | 'textForm'> = { continuity: 'fresh', textForm: false }, readonly control = false,
+    readonly secrets: readonly string[] = []) {}
   async answer(askId: string, value: unknown): Promise<boolean> {
     if (this.answered.has(askId)) return false;
     const ask = this.questions.get(askId);
@@ -58,7 +63,13 @@ export class RunProtocol {
             ...(typeof record.model === 'string' ? { model: record.model } : {}), ...(this.request.effort ? { effort: this.request.effort } : {}),
             toolVersion: record.claude_code_version ?? this.version, driverBuild: this.build });
           if (this.continuity.textForm) await emit({ type: 'notice', code: 'history_as_text', message: 'The earlier conversation was sent as labelled text because no native session could be used.' });
-        } else if (record.subtype === 'api_retry') await emit({ type: 'notice', code: 'api_retry', message: `Claude is retrying (attempt ${record.attempt ?? record.attempt_number ?? 'unknown'}).` });
+        } else if (record.subtype === 'api_retry') {
+          await emit({ type: 'notice', code: 'api_retry', message: `Claude is retrying (attempt ${record.attempt ?? 'unknown'} of ${record.max_retries ?? 'unknown'}, delay ${record.retry_delay_ms ?? 'unknown'} ms${typeof record.error_status === 'number' ? ', vendor status ' + record.error_status : ''}).` });
+          if (record.error_status === 401 || record.error_status === 403 || record.error === 'authentication_failed') {
+            this.error = runFailure({ api_error_status: record.error_status, result: 'Claude reports a rejected credential while retrying.' },
+              { error: record.error }, this.family, this.version, this.secrets, this.lastUsage);
+          }
+        }
         else if (record.subtype === 'background_tasks_changed') {
           if (!Array.isArray(record.tasks)) throw protocolFailure();
           this.background = record.tasks.length > 0;
@@ -87,7 +98,8 @@ export class RunProtocol {
       case 'assistant':
         if (!isObject(record.message) || !Array.isArray(record.message.content)) throw protocolFailure();
         if (record.error) {
-          this.error = new Failure('vendor_error', record.message.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n'));
+          this.assistantError = record;
+          this.error = runFailure(undefined, record, this.family, this.version, this.secrets, this.lastUsage);
           break;
         }
         for (const block of record.message.content) {
@@ -162,7 +174,7 @@ export class RunProtocol {
         else delete this.finalUsage.costUsd;
         this.events.usage = { ...this.finalUsage };
         await emit({ type: 'usage', usage: this.events.usage });
-        if (record.is_error) this.error ??= new Failure('vendor_error', (Array.isArray(record.errors) ? record.errors.join('\n') : record.result) || 'Claude reported an error.');
+        if (record.is_error) this.error = runFailure(record, this.assistantError, this.family, this.version, this.secrets, this.lastUsage);
         else this.error = undefined;
         break;
       }
@@ -170,7 +182,10 @@ export class RunProtocol {
         this.questions.delete(record.request_id);
         if (this.events.asks.delete(record.request_id)) await this.events.emit({ type: 'ask_closed', askId: record.request_id, reason: 'withdrawn' });
         break;
-      case 'rate_limit_event': case 'control_response': break;
+      case 'rate_limit_event':
+        if (this.family === 'anthropic') this.lastUsage = limitReport(record) ?? this.lastUsage;
+        break;
+      case 'control_response': break;
       default: throw protocolFailure();
     }
   }

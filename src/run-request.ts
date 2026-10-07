@@ -94,7 +94,6 @@ export async function readRequest(command: Command, settings: DriverSettings, fi
   if (workingDirectory !== undefined) workingDirectory = await realpath(workingDirectory);
   if (value.limits !== undefined && (!isObject(value.limits) || Object.entries(value.limits).some(([key, n]) =>
     !['idleSeconds', 'totalSeconds'].includes(key) || typeof n !== 'number' || !Number.isFinite(n) || n < 0))) bad('Invalid run limits.');
-  if (isObject(value.limits) && Object.keys(value.limits).length) throw new Failure('unsupported', 'Request time limits are not implemented yet (SYL-85).');
   return { runId, subscriptionId, model: value.model as string ?? defaults?.defaultModel,
     effort: value.effort as string ?? defaults?.defaultEffort, systemPrompt: value.systemPrompt as string | undefined,
     workingDirectory, additionalDirectories, history: history as HistoryItem[], input, chatSessionId: value.chatSessionId as string | undefined,

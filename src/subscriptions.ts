@@ -193,6 +193,24 @@ export class Subscriptions {
     return subscription;
   }
 
+  async runReport(initial: Subscription, failure?: DriverError, usage?: UsageReport): Promise<void> {
+    if (failure?.code !== 'credential_rejected' && !usage) return;
+    await this.state.withSubscriptionLock(initial.id, async () => {
+      const current = await this.record(initial.id);
+      // Merge run reports, preserving labels and reports from other runs. A newer
+      // login/check or a sign-out must never be replaced by an old run's answer.
+      const ownRejection = failure?.code === 'credential_rejected' && current.state === 'needs_attention' && JSON.stringify(current.problem) === JSON.stringify(failure);
+      if (!ownRejection && (current.state !== 'signed_in' || current.checkedAt !== initial.checkedAt)) return;
+      const next = { ...current };
+      if (usage && (!current.lastUsage || Date.parse(usage.fetchedAt) >= Date.parse(current.lastUsage.fetchedAt))) next.lastUsage = usage;
+      if (failure?.code === 'credential_rejected' && !ownRejection) {
+        next.state = 'needs_attention'; next.problem = failure; next.checkedAt = new Date().toISOString();
+      }
+      next.updatedAt = new Date().toISOString();
+      await writeJson(join(this.state.subscription(initial.id), 'record.json'), next);
+    });
+  }
+
   async environment(id: string, inherited: ProcessEnv, key?: string): Promise<ProcessEnv> {
     const subscription = await this.get(id);
     const home = join(this.state.subscription(id), 'home');

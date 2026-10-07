@@ -29,7 +29,7 @@ export async function notedOwners(path: string): Promise<Owner[]> {
 interface GroupProcess extends Owner { group: number; zombie: boolean }
 async function processes(deadline: number): Promise<GroupProcess[]> {
   const { stdout } = await exec('/bin/ps', ['-axo', 'pid=,pgid=,stat=,lstart='], {
-    env: { PATH: '/usr/bin:/bin', LC_ALL: 'C', TZ: 'UTC' }, timeout: Math.max(1, Math.min(1000, deadline - performance.now())), maxBuffer: 4 * 1024 * 1024,
+    env: { PATH: '/usr/bin:/bin', LC_ALL: 'C', TZ: 'UTC' }, timeout: Math.max(1, Math.min(1000, Math.ceil(deadline - performance.now()))), maxBuffer: 4 * 1024 * 1024,
   });
   return stdout.split('\n').flatMap(line => {
     const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line); if (!match) return [];

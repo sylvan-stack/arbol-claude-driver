@@ -14,6 +14,9 @@ import { Chats } from './continuity.js';
 import { MessageDigest, textHistory } from './history.js';
 import { readRequest, runArguments, userRecord } from './run-request.js';
 import { RunProtocol } from './run-protocol.js';
+import { RunClock } from './run-clock.js';
+import { exitFailure } from './run-errors.js';
+import type { UsageReport } from './subscriptions.js';
 import type { RunEvents } from './run-events.js';
 import type { Subscriptions } from './subscriptions.js';
 import type { Command } from './arguments.js';
@@ -38,7 +41,10 @@ export async function run(command: Command, subscriptions: Subscriptions, events
   if (subscription.family === 'zai') {
     const source = new Secrets(await keychainService(subscriptions.state.directory), userInfo().homedir, env, signal);
     key = await source.read(subscription.id, subscriptions.settings.subscriptions?.[subscription.id]?.secret);
-    if (!key) throw new Failure('credential_rejected', 'The Subscription has no key.', { remedy: 'Replace the key.' });
+    if (!key) {
+      const failure = new Failure('credential_rejected', 'The Subscription has no key.', { remedy: 'Replace the key.' });
+      await subscriptions.runReport(subscription, failure.result); throw failure;
+    }
     validateKey(key); secrets.push(key);
   }
   const runs = new Runs(subscriptions.state);
@@ -51,6 +57,8 @@ export async function run(command: Command, subscriptions: Subscriptions, events
   events.onText = text => fingerprint.add({ type: 'message', role: 'assistant', text });
   const temp = join(subscriptions.state.directory, 'tmp', request.runId);
   let error: unknown, cancelled = false, toolSettled = false;
+  let lastUsage: UsageReport | undefined;
+  let totalStart: number | undefined;
   let stopActive: (() => void) | undefined;
   let activeProtocol: RunProtocol | undefined;
   const controlTask = command.options.control ? (async () => {
@@ -87,16 +95,18 @@ export async function run(command: Command, subscriptions: Subscriptions, events
     const launchers = await runLaunchers(temp, env);
     childEnv.CLAUDE_CODE_SHELL = launchers.shell;
     childEnv.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1'; childEnv.BASH_DEFAULT_TIMEOUT_MS = '300000'; childEnv.BASH_MAX_TIMEOUT_MS = '1800000';
+    childEnv.CLAUDE_CODE_MAX_RETRIES = '3';
     if (request.searchPath.length) childEnv.PATH = (childEnv.PATH ?? '') + delimiter + request.searchPath.join(delimiter);
     await chats.prepare(plan, request, home, cwd);
     for (let attempt = 0; attempt < 2; attempt++) {
+      totalStart ??= performance.now();
       const child = spawn(launchers.launcher, [tool.path!, ...runArguments(request, plan.conversation, command.options.control === true, plan.resume), ...ownerArgs], { env: childEnv, cwd, detached: true, stdio: 'pipe' });
-      let stderr = '', spawnError = false;
+      let stderr = '', spawnError = false, missing = false;
       let stopDeadline: number | undefined;
       let cleanup: Promise<number[]> | undefined;
       const kill = (name: NodeJS.Signals): void => { if (child.pid) { try { process.kill(-child.pid, name); } catch { /* gone */ } } };
       const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(resolve => {
-        child.on('error', () => { spawnError = true; }); child.on('close', (code, signal) => resolve({ code, signal }));
+        child.on('error', failure => { spawnError = true; missing = 'code' in failure && failure.code === 'ENOENT'; }); child.on('close', (code, signal) => resolve({ code, signal }));
       });
       let exhausted: (() => void) | undefined;
       const forcedClose = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(resolve => {
@@ -113,7 +123,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
       const send = async (record: object): Promise<void> => {
         await new Promise<void>((resolve, reject) => child.stdin.write(JSON.stringify(record) + '\n', error => error ? reject(new Failure('tool_failed', 'Claude input closed.')) : resolve()));
       };
-      const protocol = new RunProtocol(events, request, build, tool.version!, subscription.family, send, plan, command.options.control === true);
+      const protocol = new RunProtocol(events, request, build, tool.version!, subscription.family, send, plan, command.options.control === true, secrets);
       activeProtocol = protocol;
       let stopTimer: ReturnType<typeof setTimeout> | undefined;
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
@@ -130,7 +140,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
       signal.addEventListener('abort', stop, { once: true });
       const outputError = (): void => { cancelled = true; stop(); };
       events.output.on('error', outputError);
-      const startTimer = setTimeout(() => { error = new Failure('limit_reached', 'Claude did not start within sixty seconds.', { detail: { basis: 'fields', limit: 'start' } }); kill('SIGKILL'); }, fixedWait(60000));
+      const clock = new RunClock(request.limits, failure => { error ??= failure; stop(); }, totalStart);
       let endTimer: ReturnType<typeof setTimeout> | undefined;
       const stdout = createInterface({ input: child.stdout, crlfDelay: Infinity });
       let gotSettings = false, initialized = false, promptSent = false;
@@ -143,6 +153,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
         if (signal.aborted || cancelled) stop();
         await send({ type: 'control_request', request_id: initializeId, request: { subtype: 'initialize' } });
         for await (const line of stdout) {
+          clock.life(protocol.started || pendingInit !== undefined, protocol.background || events.calls.size > 0 || events.asks.size > 0);
           let value: unknown;
           try { value = JSON.parse(line); } catch { throw new Failure('tool_unsupported', 'Claude returned invalid JSON.'); }
           if (isObject(value) && value.type === 'control_response' && isObject(value.response)) {
@@ -171,13 +182,18 @@ export async function run(command: Command, subscriptions: Subscriptions, events
               isRefusal([value.result, ...(Array.isArray(value.errors) ? value.errors : [])].join('\n'))) {
               resumeRefused = true; child.stdin.end(); endTimer = setTimeout(() => kill('SIGKILL'), fixedWait(2000)); break;
             }
-            if (plan.resume && isObject(value) && value.type === 'system' && value.subtype === 'init') { pendingInit = value; clearTimeout(startTimer); }
+            if (plan.resume && isObject(value) && value.type === 'system' && value.subtype === 'init') { pendingInit = value; }
             else {
               if (pendingInit) { await protocol.accept(pendingInit); pendingInit = undefined; }
               await protocol.accept(value);
             }
           }
-          if (protocol.started) clearTimeout(startTimer);
+          clock.life(protocol.started || pendingInit !== undefined, protocol.background || events.calls.size > 0 || events.asks.size > 0);
+          if (protocol.error?.result.code === 'credential_rejected') {
+            error ??= protocol.error;
+            stop();
+            await subscriptions.runReport(subscription, protocol.error.result, protocol.lastUsage);
+          }
           if (isObject(value) && value.type === 'result' && protocol.result && (!protocol.background || protocol.error)) {
             toolSettled = true; child.stdin.end(); endTimer = setTimeout(() => kill('SIGKILL'), fixedWait(2000));
             break;
@@ -186,11 +202,10 @@ export async function run(command: Command, subscriptions: Subscriptions, events
         const exit = await boundedClose();
         resumeRefused ||= plan.resume && !protocol.started && !events.producedOutput && isRefusal(stderr);
         if (!resumeRefused) {
-          if (spawnError) throw new Failure('tool_failed', 'Claude could not start.');
+          if (spawnError) throw exitFailure(stderr, exit.code, tool.version!, secrets, missing);
           if (protocol.error) throw protocol.error;
           if (protocol.background && !cancelled) throw new Failure('tool_failed', 'Claude ended while background tasks were still running.');
-          if (!protocol.result && !cancelled) throw new Failure('tool_failed', `Claude ended without a result${stderr ? ': ' + stderr : '.'}`, {
-            detail: { basis: 'fields', ...(exit.code === null ? {} : { toolExit: exit.code }), ...(stderr ? { excerpt: stderr } : {}) } }, secrets);
+          if (!protocol.result && !cancelled) throw exitFailure(stderr, exit.code, tool.version!, secrets);
           if (!promptSent && !cancelled) throw new Failure('tool_unsupported', 'Claude did not complete its settings handshake.');
         }
       } catch (failure) {
@@ -199,7 +214,8 @@ export async function run(command: Command, subscriptions: Subscriptions, events
         else error ??= failure;
       }
       finally {
-        clearTimeout(startTimer); clearTimeout(stopTimer); clearTimeout(endTimer);
+        clock.close(); clearTimeout(stopTimer); clearTimeout(endTimer);
+        if (protocol.lastUsage) lastUsage = protocol.lastUsage;
         signal.removeEventListener('abort', stop); events.output.off('error', outputError);
         stdout.close(); stopActive = undefined; activeProtocol = undefined;
         kill('SIGKILL');
@@ -228,6 +244,8 @@ export async function run(command: Command, subscriptions: Subscriptions, events
     await rm(temp, { recursive: true, force: true }).catch(failure => { error ??= failure; });
   }
   cancelled ||= signal.aborted;
+  try { await subscriptions.runReport(subscription, error instanceof Failure ? error.result : undefined, lastUsage); }
+  catch (failure) { error ??= failure; }
   try { await chats.settle(request, plan, fingerprint.snapshot(), !error && !cancelled, home); }
   catch (failure) {
     error ??= failure;
