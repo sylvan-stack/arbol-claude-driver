@@ -25,7 +25,15 @@ class PackagingTests(unittest.TestCase):
             (cache / f"{expected}.tar.gz").write_bytes(b"corrupt archive")
             with patch.dict(os.environ, {"ARBOL_PYTHON_ARCHIVE_CACHE": name}), patch("urllib.request.urlopen") as download:
                 with self.assertRaisesRegex(ValueError, "wrong SHA-256"):
-                    package_build.archive({"url": "https://example.invalid/python.tar.gz", "sha256": expected})
+                    package_build.archive({"url": "https://github.com/astral-sh/python-build-standalone/releases/download/test/python.tar.gz", "sha256": expected})
+                download.assert_not_called()
+
+    def test_archive_pin_rejects_nonhex_digests_and_untrusted_sources(self) -> None:
+        for distribution in ({"url": "https://example.invalid/python.tar.gz", "sha256": "f" * 64},
+                             {"url": "https://github.com/astral-sh/python-build-standalone/releases/download/test/python.tar.gz", "sha256": "/" * 64}):
+            with self.subTest(distribution=distribution), patch("urllib.request.urlopen") as download:
+                with self.assertRaisesRegex(ValueError, "pinned URL and SHA-256"):
+                    package_build.archive(distribution)
                 download.assert_not_called()
 
     def test_package_metadata_must_agree(self) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,7 +22,8 @@ from build_support import COMPONENT, ENTRY, ROOT, build_folder, digest, metadata
 def archive(distribution: dict[str, Any]) -> Path:
     checksum = distribution.get("sha256")
     url = distribution.get("url")
-    if not isinstance(checksum, str) or len(checksum) != 64 or not isinstance(url, str):
+    if (not isinstance(checksum, str) or re.fullmatch(r"[0-9a-f]{64}", checksum) is None or not isinstance(url, str)
+            or not url.startswith("https://github.com/astral-sh/python-build-standalone/releases/download/")):
         raise ValueError("The standalone distribution must have a pinned URL and SHA-256 digest.")
     cache = Path(os.environ.get("ARBOL_PYTHON_ARCHIVE_CACHE", str(Path.home() / ".cache/arbol-driver-build/python")))
     cache.mkdir(parents=True, exist_ok=True)
