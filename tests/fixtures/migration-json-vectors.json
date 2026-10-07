@@ -1,0 +1,55 @@
+{
+  "issue": "SYL-95",
+  "check": "migration.ecmascript-json",
+  "node": "v24.21.0",
+  "vectors": [
+    {
+      "inputJson": "-0",
+      "expected": "0"
+    },
+    {
+      "inputJson": "1e-6",
+      "expected": "0.000001"
+    },
+    {
+      "inputJson": "1e-7",
+      "expected": "1e-7"
+    },
+    {
+      "inputJson": "1e20",
+      "expected": "100000000000000000000"
+    },
+    {
+      "inputJson": "1e21",
+      "expected": "1e+21"
+    },
+    {
+      "inputJson": "9007199254740993",
+      "expected": "9007199254740992"
+    },
+    {
+      "inputJson": "1000000000000000128",
+      "expected": "1000000000000000100"
+    },
+    {
+      "inputJson": "1.7976931348623157e308",
+      "expected": "1.7976931348623157e+308"
+    },
+    {
+      "inputJson": "5e-324",
+      "expected": "5e-324"
+    },
+    {
+      "inputJson": "{\"10\":\"ten\",\"2\":\"two\",\"01\":\"leading\",\"4294967295\":\"ordinary\",\"4294967294\":\"index\",\"name\":\"last\"}",
+      "expected": "{\"2\":\"two\",\"10\":\"ten\",\"4294967294\":\"index\",\"01\":\"leading\",\"4294967295\":\"ordinary\",\"name\":\"last\"}"
+    },
+    {
+      "inputJson": "{\"line\":\"\\n\\t\\u0000\\u2028\\u2029\",\"pair\":\"\\ud83d\\ude00\",\"lone\":\"\\ud83d\"}",
+      "expected": "{\"line\":\"\\n\\t\\u0000  \",\"pair\":\"😀\",\"lone\":\"\\ud83d\"}"
+    },
+    {
+      "inputJson": "{\"tool\":{\"arguments\":{\"count\":9007199254740993,\"ratio\":1e-7}}}",
+      "expected": "{\"tool\":{\"arguments\":{\"count\":9007199254740992,\"ratio\":1e-7}}}"
+    }
+  ]
+}

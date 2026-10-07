@@ -1,0 +1,947 @@
+{
+  "issue": "SYL-95",
+  "date": "2026-10-07",
+  "node": "v24.21.0",
+  "drivers": {
+    "claude": {
+      "commit": "89322877059cb0cdeb6f549d6338d3863adce710",
+      "worktree": ""
+    },
+    "codex": {
+      "commit": "37daaf853ae1f4d5382a316b5c7da683b057dda1",
+      "worktree": ""
+    }
+  },
+  "histories": [
+    {
+      "name": "empty",
+      "history": [],
+      "canonical": {
+        "messages": 0,
+        "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "json": "[]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 0,
+          "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 0,
+          "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "ascii",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "hello"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "world"
+        }
+      ],
+      "canonical": {
+        "messages": 2,
+        "digest": "4da0471b444781928f4bfe033f4165ea0ead638a222e601e43f458d5d2691b3c",
+        "json": "[[\"user\",\"hello\",[]],[\"assistant\",\"world\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 2,
+          "digest": "4da0471b444781928f4bfe033f4165ea0ead638a222e601e43f458d5d2691b3c",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "2d1d0af3ad3e6eff734e2383282251717d8b03098f50a8291a75a8dc1c76b691"
+            },
+            {
+              "messages": 2,
+              "digest": "4da0471b444781928f4bfe033f4165ea0ead638a222e601e43f458d5d2691b3c"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 2,
+          "digest": "4da0471b444781928f4bfe033f4165ea0ead638a222e601e43f458d5d2691b3c",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "2d1d0af3ad3e6eff734e2383282251717d8b03098f50a8291a75a8dc1c76b691"
+            },
+            {
+              "messages": 2,
+              "digest": "4da0471b444781928f4bfe033f4165ea0ead638a222e601e43f458d5d2691b3c"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "unicode-and-controls",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "Quote \" slash \\\n\r\t\b\f\u0000 café 中文 😀   "
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "¿sí?"
+        }
+      ],
+      "canonical": {
+        "messages": 2,
+        "digest": "f18428ab1e3e52b0856880bd9e27f483c7456d5dfb7ca4a96a7207eb148ec0b8",
+        "json": "[[\"user\",\"Quote \\\" slash \\\\\\n\\r\\t\\b\\f\\u0000 café 中文 😀   \",[]],[\"assistant\",\"¿sí?\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 2,
+          "digest": "f18428ab1e3e52b0856880bd9e27f483c7456d5dfb7ca4a96a7207eb148ec0b8",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "526ef912d9d9b0c7b8b359ea2c543793215e85cfe562d9c98c2c6dd03d98e737"
+            },
+            {
+              "messages": 2,
+              "digest": "f18428ab1e3e52b0856880bd9e27f483c7456d5dfb7ca4a96a7207eb148ec0b8"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 2,
+          "digest": "f18428ab1e3e52b0856880bd9e27f483c7456d5dfb7ca4a96a7207eb148ec0b8",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "526ef912d9d9b0c7b8b359ea2c543793215e85cfe562d9c98c2c6dd03d98e737"
+            },
+            {
+              "messages": 2,
+              "digest": "f18428ab1e3e52b0856880bd9e27f483c7456d5dfb7ca4a96a7207eb148ec0b8"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "images-decoded-bytes",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "picture",
+          "images": [
+            {
+              "mediaType": "image/png",
+              "data": "aQ=="
+            },
+            {
+              "mediaType": "image/jpeg",
+              "data": "AAECA//+"
+            }
+          ]
+        }
+      ],
+      "canonical": {
+        "messages": 1,
+        "digest": "5f5bec8ee51966eea85d4fa0afbc5c17b0fd1bd07042251f920edcd5510389a5",
+        "json": "[[\"user\",\"picture\",[[\"image/png\",\"de7d1b721a1e0632b7cf04edf5032c8ecffa9f9a08492152b926f1a5a7e765d7\"],[\"image/jpeg\",\"949fabd3ca6ec0c475dfba1d815764e879a8f2c87d60dd7510d646a3027647df\"]]]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 1,
+          "digest": "5f5bec8ee51966eea85d4fa0afbc5c17b0fd1bd07042251f920edcd5510389a5",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "5f5bec8ee51966eea85d4fa0afbc5c17b0fd1bd07042251f920edcd5510389a5"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 1,
+          "digest": "5f5bec8ee51966eea85d4fa0afbc5c17b0fd1bd07042251f920edcd5510389a5",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "5f5bec8ee51966eea85d4fa0afbc5c17b0fd1bd07042251f920edcd5510389a5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "image-base64-pad-bits",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "same bytes",
+          "images": [
+            {
+              "mediaType": "image/png",
+              "data": "aR=="
+            }
+          ]
+        }
+      ],
+      "canonical": {
+        "messages": 1,
+        "digest": "a28a20f9a3d757c952798ced8b65fc0263061398ec1a9619b0c638482da59927",
+        "json": "[[\"user\",\"same bytes\",[[\"image/png\",\"de7d1b721a1e0632b7cf04edf5032c8ecffa9f9a08492152b926f1a5a7e765d7\"]]]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 1,
+          "digest": "a28a20f9a3d757c952798ced8b65fc0263061398ec1a9619b0c638482da59927",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "a28a20f9a3d757c952798ced8b65fc0263061398ec1a9619b0c638482da59927"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 1,
+          "digest": "a28a20f9a3d757c952798ced8b65fc0263061398ec1a9619b0c638482da59927",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "a28a20f9a3d757c952798ced8b65fc0263061398ec1a9619b0c638482da59927"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "assistant-blocks",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "prompt"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "first"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "second"
+        }
+      ],
+      "canonical": {
+        "messages": 2,
+        "digest": "8295f7f7b71372f5be6e2e98ca99c1e252979bd75b94c28583821e1da9ede2a7",
+        "json": "[[\"user\",\"prompt\",[]],[\"assistant\",\"firstsecond\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 2,
+          "digest": "8295f7f7b71372f5be6e2e98ca99c1e252979bd75b94c28583821e1da9ede2a7",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "6b6c0f5c2e32635a637284b3c92f95dfb2ebe8bbd18fad8625f24cdbe9c123ec"
+            },
+            {
+              "messages": 2,
+              "digest": "e7d7c7a62b4529a6f92f0aba6392fb429af92872545d39b057eac0a45496157c"
+            },
+            {
+              "messages": 2,
+              "digest": "8295f7f7b71372f5be6e2e98ca99c1e252979bd75b94c28583821e1da9ede2a7"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 2,
+          "digest": "8295f7f7b71372f5be6e2e98ca99c1e252979bd75b94c28583821e1da9ede2a7",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "6b6c0f5c2e32635a637284b3c92f95dfb2ebe8bbd18fad8625f24cdbe9c123ec"
+            },
+            {
+              "messages": 2,
+              "digest": "e7d7c7a62b4529a6f92f0aba6392fb429af92872545d39b057eac0a45496157c"
+            },
+            {
+              "messages": 2,
+              "digest": "8295f7f7b71372f5be6e2e98ca99c1e252979bd75b94c28583821e1da9ede2a7"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "assistant-across-tool",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "prompt"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "before"
+        },
+        {
+          "type": "tool_call",
+          "name": "shell",
+          "input": {
+            "command": "printf fixture"
+          },
+          "ok": true,
+          "result": {
+            "output": "fixture",
+            "exitCode": 0
+          }
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "after"
+        }
+      ],
+      "canonical": {
+        "messages": 2,
+        "digest": "a4b128ecd9f2dc51e778dadf6be28494d8fa4fcd4b893f1e70343524fd9abbfd",
+        "json": "[[\"user\",\"prompt\",[]],[\"assistant\",\"beforeafter\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 2,
+          "digest": "a4b128ecd9f2dc51e778dadf6be28494d8fa4fcd4b893f1e70343524fd9abbfd",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "6b6c0f5c2e32635a637284b3c92f95dfb2ebe8bbd18fad8625f24cdbe9c123ec"
+            },
+            {
+              "messages": 2,
+              "digest": "d0ed7ea9ef19ba9399b1583a1d6f5cac03d94152eef7a973c24f51213b6b14cf"
+            },
+            {
+              "messages": 2,
+              "digest": "d0ed7ea9ef19ba9399b1583a1d6f5cac03d94152eef7a973c24f51213b6b14cf"
+            },
+            {
+              "messages": 2,
+              "digest": "a4b128ecd9f2dc51e778dadf6be28494d8fa4fcd4b893f1e70343524fd9abbfd"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 2,
+          "digest": "a4b128ecd9f2dc51e778dadf6be28494d8fa4fcd4b893f1e70343524fd9abbfd",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "6b6c0f5c2e32635a637284b3c92f95dfb2ebe8bbd18fad8625f24cdbe9c123ec"
+            },
+            {
+              "messages": 2,
+              "digest": "d0ed7ea9ef19ba9399b1583a1d6f5cac03d94152eef7a973c24f51213b6b14cf"
+            },
+            {
+              "messages": 2,
+              "digest": "d0ed7ea9ef19ba9399b1583a1d6f5cac03d94152eef7a973c24f51213b6b14cf"
+            },
+            {
+              "messages": 2,
+              "digest": "a4b128ecd9f2dc51e778dadf6be28494d8fa4fcd4b893f1e70343524fd9abbfd"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "consecutive-users",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "one"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "text": "two"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": ""
+        }
+      ],
+      "canonical": {
+        "messages": 3,
+        "digest": "6f0fe87156fb68928ba67fa23d671949f70564c56dd1b870a127e717571bb22f",
+        "json": "[[\"user\",\"one\",[]],[\"user\",\"two\",[]],[\"assistant\",\"\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 3,
+          "digest": "6f0fe87156fb68928ba67fa23d671949f70564c56dd1b870a127e717571bb22f",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "8993a060bb064a86a930ff9ec1ad397966e72ab8e1de9c7f7910c0c564fadf16"
+            },
+            {
+              "messages": 2,
+              "digest": "cb1f7810ff45b7ac1d51f34708489fd4960556fb69baa0d24138f36b3ef26d62"
+            },
+            {
+              "messages": 3,
+              "digest": "6f0fe87156fb68928ba67fa23d671949f70564c56dd1b870a127e717571bb22f"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 3,
+          "digest": "6f0fe87156fb68928ba67fa23d671949f70564c56dd1b870a127e717571bb22f",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "8993a060bb064a86a930ff9ec1ad397966e72ab8e1de9c7f7910c0c564fadf16"
+            },
+            {
+              "messages": 2,
+              "digest": "cb1f7810ff45b7ac1d51f34708489fd4960556fb69baa0d24138f36b3ef26d62"
+            },
+            {
+              "messages": 3,
+              "digest": "6f0fe87156fb68928ba67fa23d671949f70564c56dd1b870a127e717571bb22f"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "empty-assistant",
+      "history": [
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": ""
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": ""
+        }
+      ],
+      "canonical": {
+        "messages": 1,
+        "digest": "c1c93a27345cf7321bb67f979726e8d6010b6c6957f90451722ce38d044aca6c",
+        "json": "[[\"assistant\",\"\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 1,
+          "digest": "c1c93a27345cf7321bb67f979726e8d6010b6c6957f90451722ce38d044aca6c",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "c1c93a27345cf7321bb67f979726e8d6010b6c6957f90451722ce38d044aca6c"
+            },
+            {
+              "messages": 1,
+              "digest": "c1c93a27345cf7321bb67f979726e8d6010b6c6957f90451722ce38d044aca6c"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 1,
+          "digest": "c1c93a27345cf7321bb67f979726e8d6010b6c6957f90451722ce38d044aca6c",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "c1c93a27345cf7321bb67f979726e8d6010b6c6957f90451722ce38d044aca6c"
+            },
+            {
+              "messages": 1,
+              "digest": "c1c93a27345cf7321bb67f979726e8d6010b6c6957f90451722ce38d044aca6c"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "lone-high-surrogate",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "\ud83d"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "\ud83d"
+        }
+      ],
+      "canonical": {
+        "messages": 2,
+        "digest": "809673d0cb81920e7979593b9461a99fb9bf2cad635b457367adf43f89cf2de2",
+        "json": "[[\"user\",\"\\ud83d\",[]],[\"assistant\",\"\\ud83d\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 2,
+          "digest": "809673d0cb81920e7979593b9461a99fb9bf2cad635b457367adf43f89cf2de2",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "5644b0b1145b4ce6491046e31b69d8c55886e1d3fb0dd64afc2a232413ffa19a"
+            },
+            {
+              "messages": 2,
+              "digest": "809673d0cb81920e7979593b9461a99fb9bf2cad635b457367adf43f89cf2de2"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 2,
+          "digest": "809673d0cb81920e7979593b9461a99fb9bf2cad635b457367adf43f89cf2de2",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "5644b0b1145b4ce6491046e31b69d8c55886e1d3fb0dd64afc2a232413ffa19a"
+            },
+            {
+              "messages": 2,
+              "digest": "809673d0cb81920e7979593b9461a99fb9bf2cad635b457367adf43f89cf2de2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "lone-low-surrogate",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "\ude00"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "\ude00"
+        }
+      ],
+      "canonical": {
+        "messages": 2,
+        "digest": "3c5d805f090858b6985212d046fb178f9bfa097a027b23af3f236f4fc9628b71",
+        "json": "[[\"user\",\"\\ude00\",[]],[\"assistant\",\"\\ude00\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 2,
+          "digest": "3c5d805f090858b6985212d046fb178f9bfa097a027b23af3f236f4fc9628b71",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "95d61aa655d0f97ecc8d0f0b457c21da49c71acc6e63207e37049f4641960d35"
+            },
+            {
+              "messages": 2,
+              "digest": "3c5d805f090858b6985212d046fb178f9bfa097a027b23af3f236f4fc9628b71"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 2,
+          "digest": "3c5d805f090858b6985212d046fb178f9bfa097a027b23af3f236f4fc9628b71",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "95d61aa655d0f97ecc8d0f0b457c21da49c71acc6e63207e37049f4641960d35"
+            },
+            {
+              "messages": 2,
+              "digest": "3c5d805f090858b6985212d046fb178f9bfa097a027b23af3f236f4fc9628b71"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "split-surrogate-pair",
+      "history": [
+        {
+          "type": "message",
+          "role": "user",
+          "text": "prompt"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "\ud83d"
+        },
+        {
+          "type": "tool_call",
+          "name": "shell",
+          "input": {
+            "command": "printf fixture"
+          },
+          "ok": true,
+          "result": {
+            "output": "fixture",
+            "exitCode": 0
+          }
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "\ude00"
+        }
+      ],
+      "canonical": {
+        "messages": 2,
+        "digest": "45f80695f87c9d5dba13537a7489a3094e00f548d897ec0d0b630f2740647dca",
+        "json": "[[\"user\",\"prompt\",[]],[\"assistant\",\"😀\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 2,
+          "digest": "80ffaa4172d256dd2d80e0dac2187762c1b01fd20177d976e5e4f83c151aa1a1",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "6b6c0f5c2e32635a637284b3c92f95dfb2ebe8bbd18fad8625f24cdbe9c123ec"
+            },
+            {
+              "messages": 2,
+              "digest": "febbc211cea9504924071b794053e164fc189d2e50220303f9edaacabecbbf5f"
+            },
+            {
+              "messages": 2,
+              "digest": "febbc211cea9504924071b794053e164fc189d2e50220303f9edaacabecbbf5f"
+            },
+            {
+              "messages": 2,
+              "digest": "80ffaa4172d256dd2d80e0dac2187762c1b01fd20177d976e5e4f83c151aa1a1"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 2,
+          "digest": "45f80695f87c9d5dba13537a7489a3094e00f548d897ec0d0b630f2740647dca",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "6b6c0f5c2e32635a637284b3c92f95dfb2ebe8bbd18fad8625f24cdbe9c123ec"
+            },
+            {
+              "messages": 2,
+              "digest": "febbc211cea9504924071b794053e164fc189d2e50220303f9edaacabecbbf5f"
+            },
+            {
+              "messages": 2,
+              "digest": "febbc211cea9504924071b794053e164fc189d2e50220303f9edaacabecbbf5f"
+            },
+            {
+              "messages": 2,
+              "digest": "45f80695f87c9d5dba13537a7489a3094e00f548d897ec0d0b630f2740647dca"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "paired-surrogates-in-one-block",
+      "history": [
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "😀"
+        }
+      ],
+      "canonical": {
+        "messages": 1,
+        "digest": "ab29ea42d196463d893818fbfa5c41c137d23b8fe2a3385e275aa80ca9e4bda2",
+        "json": "[[\"assistant\",\"😀\"]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 1,
+          "digest": "ab29ea42d196463d893818fbfa5c41c137d23b8fe2a3385e275aa80ca9e4bda2",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "ab29ea42d196463d893818fbfa5c41c137d23b8fe2a3385e275aa80ca9e4bda2"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 1,
+          "digest": "ab29ea42d196463d893818fbfa5c41c137d23b8fe2a3385e275aa80ca9e4bda2",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "ab29ea42d196463d893818fbfa5c41c137d23b8fe2a3385e275aa80ca9e4bda2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "high-surrogate-followed-by-user",
+      "history": [
+        {
+          "type": "message",
+          "role": "assistant",
+          "text": "\ud83d"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "text": "next"
+        }
+      ],
+      "canonical": {
+        "messages": 2,
+        "digest": "f13f7ff1cc1c8369f79436b7f66b235cf2d18fa7245a9ca82f36619c6a1e0732",
+        "json": "[[\"assistant\",\"\\ud83d\"],[\"user\",\"next\",[]]]"
+      },
+      "expected": {
+        "claude": {
+          "messages": 2,
+          "digest": "f13f7ff1cc1c8369f79436b7f66b235cf2d18fa7245a9ca82f36619c6a1e0732",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "b9cde01e01f1808b19a4c5fa2dc27707c3686101355cd468386917e10ce800b9"
+            },
+            {
+              "messages": 2,
+              "digest": "f13f7ff1cc1c8369f79436b7f66b235cf2d18fa7245a9ca82f36619c6a1e0732"
+            }
+          ]
+        },
+        "codex": {
+          "messages": 2,
+          "digest": "f13f7ff1cc1c8369f79436b7f66b235cf2d18fa7245a9ca82f36619c6a1e0732",
+          "snapshots": [
+            {
+              "messages": 0,
+              "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            {
+              "messages": 1,
+              "digest": "b9cde01e01f1808b19a4c5fa2dc27707c3686101355cd468386917e10ce800b9"
+            },
+            {
+              "messages": 2,
+              "digest": "f13f7ff1cc1c8369f79436b7f66b235cf2d18fa7245a9ca82f36619c6a1e0732"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "chats": [
+    {
+      "chat": "opaque/../chat",
+      "expected": {
+        "claude": "87f8e5c390673252bd29132b55ea61fdc6c4e46ea219b8f4d8dcf2dd58117ad5",
+        "codex": "87f8e5c390673252bd29132b55ea61fdc6c4e46ea219b8f4d8dcf2dd58117ad5"
+      }
+    },
+    {
+      "chat": "café/中文/😀",
+      "expected": {
+        "claude": "0a2cb99b977ed2371fa13b61e01787d386af445963f399cd2c458bdbe1c8a1f8",
+        "codex": "0a2cb99b977ed2371fa13b61e01787d386af445963f399cd2c458bdbe1c8a1f8"
+      }
+    },
+    {
+      "chat": "quote\"\ncontrol\u0000",
+      "expected": {
+        "claude": "4f0c0d1d43bd93e97fc273c11803e03b20d01b7f37018bb0e26dd808249d6210",
+        "codex": "4f0c0d1d43bd93e97fc273c11803e03b20d01b7f37018bb0e26dd808249d6210"
+      }
+    },
+    {
+      "chat": "\ud83d",
+      "expected": {
+        "claude": "83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097",
+        "codex": "83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097"
+      }
+    },
+    {
+      "chat": "\ude00",
+      "expected": {
+        "claude": "83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097",
+        "codex": "83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097"
+      }
+    },
+    {
+      "chat": "",
+      "expected": {
+        "claude": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "codex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "folders": [
+    {
+      "folder": "/space dir/_a.b+@ü",
+      "expected": "-space-dir--a-b---"
+    },
+    {
+      "folder": "/中文/😀/é",
+      "expected": "--------"
+    },
+    {
+      "folder": "/a\\b:c",
+      "expected": "-a-b-c"
+    },
+    {
+      "folder": "/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected": "-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "folder": "/a\n\u0000b",
+      "expected": "-a--b"
+    }
+  ],
+  "keychain": {
+    "defaultService": "com.sylvan-stack.arbol.claude-driver",
+    "customServicePrefix": "com.sylvan-stack.arbol.claude-driver",
+    "customSuffixLength": 12,
+    "customExample": {
+      "realPath": "/private/var/folders/2q/l86hj4950s3468xgx0s9rv2h0000gn/T/syl95-keychain-UVckwE/custom",
+      "service": "com.sylvan-stack.arbol.claude-driver.1c10f8216b04",
+      "sha256": "1c10f8216b04d9670347d450e08d6e0dbc351f3a5ad95259c31e86f9902fa63e"
+    }
+  }
+}
