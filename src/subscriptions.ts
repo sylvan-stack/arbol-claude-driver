@@ -181,6 +181,7 @@ export class Subscriptions {
     await this.state.withSubscriptionLock(id, async () => {
       const record = await this.record(id);
       await privateDirectory(join(this.state.subscription(id), 'home'));
+      await ownerSkills(join(this.state.subscription(id), 'home'), dirname(dirname(this.settingsFile)));
       await writeJson(join(this.state.subscription(id), 'record.json'), { ...record, label, updatedAt: new Date().toISOString() });
     });
     return this.get(id);
