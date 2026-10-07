@@ -5,6 +5,7 @@ import { childCommand } from './child.js';
 import { subscriptionProtocol } from './subscription-protocol.js';
 import { createInterface } from 'node:readline';
 import { runScenarios, runStandIn } from './run-stand-in.js';
+import { devStandIn } from './dev-stand-in.js';
 // The version line is captured by test/probe-info.mjs against the installed tool.
 // No protocol records are invented here. Later tasks add scripts from raw probes.
 export const scripts = {
@@ -19,8 +20,8 @@ export const scripts = {
 };
 export async function standIn(folder: string, args: string[]): Promise<number> {
   const [scenario, part = 'supported', ...extra] = (await readFile(join(folder, 'scenario'), 'utf8')).trim().split(/\s+/);
-  const subscriptionScenario = ['C2', 'C4', 'C5', 'C6', 'C7', 'C8', 'C39', 'C40', 'C41', ...runScenarios].includes(scenario!);
-  const known = scenario === 'C31' && ['supported', 'old', 'missing'].includes(part) || scenario === 'C32' && part === 'info' || subscriptionScenario;
+  const subscriptionScenario = ['C2', 'C4', 'C5', 'C6', 'C7', 'C8', 'C32', 'C39', 'C40', 'C41', ...runScenarios].includes(scenario!);
+  const known = scenario === 'C31' && ['supported', 'old', 'missing'].includes(part) || subscriptionScenario;
   if (extra.length || !known) throw new Failure('invalid_input', 'This stand-in does not implement that scenario.');
   const script = subscriptionScenario ? scripts.C31.supported : scenario === 'C32' ? scripts.C32.info : scripts.C31[part as keyof typeof scripts.C31];
   const home = process.env.CLAUDE_CONFIG_DIR;
@@ -40,6 +41,7 @@ export async function standIn(folder: string, args: string[]): Promise<number> {
     process.stdout.write(`${script.version} (Claude Code)\n`);
     return 0;
   }
+  if (scenario === 'C32' && args.includes('--arbol-unknown-option')) return devStandIn(folder, args, scenario, part);
   if (subscriptionScenario && home && credential) {
     if (runScenarios.includes(scenario!) && args.includes('--input-format')) return runStandIn(folder, args, scenario!, part);
     if (args.join(' ') === 'auth status --json') {

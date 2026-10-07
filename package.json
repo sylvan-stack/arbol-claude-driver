@@ -10,6 +10,15 @@
   "bin": {
     "arbol-claude-driver": "bin/arbol-claude-driver.mjs"
   },
+  "files": [
+    "bin/",
+    "dist/src/",
+    "test/run-protocol-2026-10-06.json",
+    "test/continuity-probe-2026-10-07.json",
+    "test/errors-probe-2026-10-07.json",
+    "test/errors-protocol-2026-10-07.json",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",

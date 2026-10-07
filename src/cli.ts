@@ -12,6 +12,8 @@ import { Authentication } from './authentication.js';
 import { RunEvents } from './run-events.js';
 import { run } from './run.js';
 import { Runs } from './runs.js';
+import { probe } from './dev-probes.js';
+import { liveCheck } from './dev-checks.js';
 export async function main(args: string[]): Promise<number> {
   const operationWords = args.filter((word, index) => word !== '--state-dir' && !word.startsWith('--state-dir=') && args[index - 1] !== '--state-dir');
   const isRun = operationWords[0] === 'run';
@@ -45,6 +47,14 @@ export async function main(args: string[]): Promise<number> {
       cancellation.signal.throwIfAborted();
       process.stdout.write(JSON.stringify({ driver: 'claude', ...identity, contract: 1, stateDirectory: state.directory, settingsFile: file, tool, ...(notices.length ? { notices } : {}) }) + '\n');
       return 0;
+    }
+    if (command.name === 'dev probe') {
+      const report = await probe(new Subscriptions(state, settings, notices, file), process.env, cancellation.signal);
+      process.stdout.write(JSON.stringify(report) + '\n'); return 0;
+    }
+    if (command.name === 'dev live-check' || command.name === 'dev build-check') {
+      const report = await liveCheck(command.name === 'dev build-check', new Subscriptions(state, settings, notices, file), process.env, cancellation.signal);
+      process.stdout.write(JSON.stringify(report.result) + '\n'); return report.status;
     }
     if (command.name === 'run') return await run(command, new Subscriptions(state, settings, notices, file), runEvents!, process.env, identity.build, cancellation.signal);
     if (command.name === 'runs list') {
