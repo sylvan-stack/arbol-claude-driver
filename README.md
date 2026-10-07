@@ -33,7 +33,24 @@ npm test
 npm start -- info
 ```
 
-After `npm run build`, `bin/arbol-claude-driver.mjs` is the executable. It is also the package's `arbol-claude-driver` bin entry. There is no public library interface and no runtime dependency. Numbered Builds and the search-path launcher are implemented by the separate `arbol-builds` task.
+After `npm run build`, `bin/arbol-claude-driver.mjs` is the development executable and reports Build `0`. It is also the package's `arbol-claude-driver` bin entry. There is no public library interface and no runtime dependency.
+
+## Numbered Builds
+
+The repository's `arbol-build.json` builds with `arbol-builds`, installed from the `arbol` repository. Each Build contains its executable, compiled runtime and unit tests, and the recorded protocol fixtures. It needs Node.js 24 and Claude, with no source checkout or npm dependencies to run. Its package version remains `1.0.0`; its separate hexadecimal build number comes from its own `build.json`.
+
+```sh
+arbol-builds build arbol-claude-driver
+arbol-builds list arbol-claude-driver
+arbol-claude-driver info
+arbol-claude-driver -v 1 info
+```
+
+The launcher in `~/.local/bin` selects the newest working Build. Builds and logs stay under `~/Library/Application Support/Arbol/builds/arbol-claude-driver/`. A failed check preserves its numbered record and log and leaves the previous working Build as the default.
+
+Every build runs the unit tests from the new Build, all 38 shared conformance scenarios against that Build's executable, then exactly one tools-off Haiku message through `dev build-check` on `test-anthropic`. The unit and contract checks use stand-ins and spend no vendor quota. The shared suite comes from `~/repos/sylvan-stack/arbol`; `ARBOL_CONFORMANCE_REPO` selects another checkout. The live check uses a clean environment and the Driver's default state directory, or `ARBOL_BUILD_TEST_STATE_DIR` when the signed-in test account is kept elsewhere. A missing login, exhausted usage, or any failed check prevents a working Build. No test account or credential is copied into a Build.
+
+The on-demand `node test/verify-build.mjs` checks a fresh local clone, the default and named launchers, and a deliberately failed check that stops before inference. It spends one real Haiku message and retains both numbered Build records. Select an existing signed-in test state with `ARBOL_BUILD_TEST_STATE_DIR` before running it. This script is separate from `npm test`.
 
 Settings are read afresh from `~/.arbol/arbol-claude-driver.json`. `--state-dir <path>` works before or after the command; otherwise state is kept in `~/Library/Application Support/Arbol/drivers/claude/`. `info` succeeds when Claude is missing or too old and reports `supported: false`. Commands needing the tool receive `tool_missing` or `tool_unsupported` instead.
 

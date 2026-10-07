@@ -1,0 +1,28 @@
+{
+  "component": "arbol-claude-driver",
+  "build": [
+    "npm ci",
+    "npm run build",
+    "node scripts/package-build.mjs"
+  ],
+  "entry": "bin/arbol-claude-driver.mjs",
+  "checks": [
+    {
+      "name": "build.unit",
+      "kind": "unit",
+      "command": "node --test \"$ARBOL_BUILD_DIR\"/dist/test/*.test.js"
+    },
+    {
+      "name": "build.contract",
+      "kind": "contract",
+      "command": "node scripts/check-build.mjs contract"
+    },
+    {
+      "name": "dev.build-check",
+      "kind": "live",
+      "command": "node scripts/check-build.mjs live"
+    }
+  ],
+  "contract": 1,
+  "dataFormat": 1
+}
