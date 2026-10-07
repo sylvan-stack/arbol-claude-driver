@@ -52,6 +52,8 @@ Every build runs the unit tests from the new Build, all 38 shared conformance sc
 
 The on-demand `node test/verify-build.mjs` checks a fresh local clone, the default and named launchers, and a deliberately failed check that stops before inference. It spends one real Haiku message and retains both numbered Build records. Select an existing signed-in test state with `ARBOL_BUILD_TEST_STATE_DIR` before running it. This script is separate from `npm test`.
 
+On 7 October 2026, Build `1` from a clean checkout passed all 81 unit tests, all 38 conformance scenarios and one real Haiku message with Claude 2.1.289. Both PATH launcher forms reported Build `1`, package `1.0.0`. Build `2` deliberately failed its first check, retained its record/log and left Build `1` as the default. The owner's configuration was unchanged. Evidence is in `test/build-verification-2026-10-07.json` and `test/numbered-build-{1,2}-2026-10-07.txt`.
+
 Settings are read afresh from `~/.arbol/arbol-claude-driver.json`. `--state-dir <path>` works before or after the command; otherwise state is kept in `~/Library/Application Support/Arbol/drivers/claude/`. `info` succeeds when Claude is missing or too old and reports `supported: false`. Commands needing the tool receive `tool_missing` or `tool_unsupported` instead.
 
 ```sh
