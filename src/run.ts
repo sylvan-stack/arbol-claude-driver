@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { rm } from 'node:fs/promises';
 import { join, delimiter } from 'node:path';
-import { Failure, safeText } from './errors.js';
+import { Failure, safeText, redact } from './errors.js';
 import { isObject } from './settings.js';
 import { fixedWait, privateDirectory, processOwner } from './state.js';
 import { inspectTool, requireTool } from './tool.js';
@@ -37,6 +37,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
   const subscription = await subscriptions.requireSignedIn(request.subscriptionId);
   const tool = await inspectTool(subscriptions.state, subscriptions.settings.toolPath, env, signal); requireTool(tool);
   const secrets: string[] = [];
+  events.secrets = secrets;
   let key: string | undefined;
   if (subscription.family === 'zai') {
     const source = new Secrets(await keychainService(subscriptions.state.directory), userInfo().homedir, env, signal);
@@ -192,7 +193,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
           if (protocol.error?.result.code === 'credential_rejected') {
             error ??= protocol.error;
             stop();
-            await subscriptions.runReport(subscription, protocol.error.result, protocol.lastUsage);
+            await subscriptions.runReport(subscription, redact(protocol.error.result, secrets), redact(protocol.lastUsage, secrets));
           }
           if (isObject(value) && value.type === 'result' && protocol.result && (!protocol.background || protocol.error)) {
             toolSettled = true; child.stdin.end(); endTimer = setTimeout(() => kill('SIGKILL'), fixedWait(2000));
@@ -244,7 +245,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
     await rm(temp, { recursive: true, force: true }).catch(failure => { error ??= failure; });
   }
   cancelled ||= signal.aborted;
-  try { await subscriptions.runReport(subscription, error instanceof Failure ? error.result : undefined, lastUsage); }
+  try { await subscriptions.runReport(subscription, redact(error instanceof Failure ? error.result : undefined, secrets), redact(lastUsage, secrets)); }
   catch (failure) { error ??= failure; }
   try { await chats.settle(request, plan, fingerprint.snapshot(), !error && !cancelled, home); }
   catch (failure) {

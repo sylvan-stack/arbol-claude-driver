@@ -30,6 +30,13 @@ export function safeText(text: string, secrets: readonly string[] = [], limit = 
   while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start++;
   return bytes.subarray(start).toString('utf8');
 }
+export function redact<T>(value: T, secrets: readonly string[]): T {
+  if (typeof value === 'string') return safeText(value, secrets, Infinity) as T;
+  if (Array.isArray(value)) return value.map(item => redact(item, secrets)) as T;
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) =>
+    [safeText(key, secrets, Infinity), redact(item, secrets)])) as T;
+  return value;
+}
 export class Failure extends Error {
   readonly result: DriverError;
   constructor(code: ErrorCode, message: string, extra: Omit<Partial<DriverError>, 'code' | 'message' | 'retryable'> = {}, secrets: readonly string[] = []) {

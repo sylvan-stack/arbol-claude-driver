@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Writable } from 'node:stream';
-import { Failure, safeFailure } from './errors.js';
+import { Failure, safeFailure, redact } from './errors.js';
 import type { DriverError } from './errors.js';
 
 export interface RunUsage { model?: string; inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; reasoningTokens?: number; costUsd?: number }
@@ -16,10 +16,12 @@ export class RunEvents {
   usage: RunUsage = {};
   readonly calls = new Map<string, { name: string; parentCallId?: string }>();
   readonly asks = new Set<string>();
+  secrets: readonly string[] = [];
   constructor(readonly output: Writable = process.stdout, readonly textOnly = false) {}
   async emit(event: EventBody): Promise<void> {
     if (this.finished) return;
-    const record = { runId: this.runId, seq: ++this.seq, at: new Date().toISOString(), ...(this.labels ? { labels: this.labels } : {}), ...event };
+    event = redact(event, this.secrets);
+    const record = redact({ runId: this.runId, seq: ++this.seq, at: new Date().toISOString(), ...(this.labels ? { labels: this.labels } : {}), ...event }, this.secrets);
     if ((event.type === 'text' || event.type === 'text_delta' || event.type === 'thinking' || event.type === 'thinking_delta') && event.text) this.producedOutput = true;
     if (event.type === 'tool_started') this.producedOutput = true;
     if (event.type === 'text' && !event.parentCallId) this.onText?.(String(event.text));
