@@ -72,6 +72,14 @@ def verify(candidate: Path, arbol: Path, node: str) -> dict[str, Any]:
             raise ValueError("Relocated candidate must report its package version and development build 0.")
         report["relocatedInfo"] = direct
         report["checks"].append({"check": "build.folder-alone", "passed": True})
+        relocated_unit = command([str(relocated / "runtime/python/bin/python3.14"), "-I",
+                                  str(relocated / "scripts/check_build.py"), "unit", "--candidate", str(relocated)],
+                                 temporary, env)
+        if relocated_unit.returncode:
+            raise ValueError(f"Relocated packaged unit tests failed: {relocated_unit.stderr or relocated_unit.stdout}")
+        report["relocatedUnit"] = {"exitCode": relocated_unit.returncode, "stdout": relocated_unit.stdout,
+                                   "stderr": relocated_unit.stderr}
+        report["checks"].append({"check": "build.relocated-unit", "passed": True})
         (repo / "package.json").write_text(json.dumps({"version": version}) + "\n")
         (repo / "copy_program.py").write_text(COPY_PROGRAM)
         # Preserve the production descriptor by creating a separate fixture repo.
