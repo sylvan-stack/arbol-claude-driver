@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from arbol_claude_driver.continuity import Chats, Runs  # noqa: E402
-from arbol_claude_driver.core import Failure, Record, clean_environment, compact, loads, now, parse_arguments, read_settings, safe_failure, utf8  # noqa: E402
+from arbol_claude_driver.core import Failure, Record, clean_environment, compact, loads, now, number, parse_arguments, read_settings, safe_failure, utf8  # noqa: E402
 from arbol_claude_driver.history import MessageDigest, digest, encode_folder, result_text, session_lines  # noqa: E402
 from arbol_claude_driver.dev import live_check  # noqa: E402
 from arbol_claude_driver.models import ValidatedRequest  # noqa: E402
@@ -62,6 +62,8 @@ class CompatibilityTests(unittest.TestCase):
             self.assertEqual(keychain_service(real), keychain_service(alias))
 
     def test_json_stringify_numbers_indices_controls_and_surrogates(self) -> None:
+        self.assertFalse(number(10**400))
+        self.assertEqual(compact(10**400), 'null')
         self.assertEqual(compact({'z': 1.0, '10': 1e-6, '2': 1e21, '01': -0.0}), '{"2":1e+21,"10":0.000001,"z":1,"01":0}')
         self.assertEqual(compact('\ud83d\ude00\ud83d\n\x00'), '"😀\\ud83d\\n\\u0000"')
         self.assertEqual(utf8('\ud83d'), b'\xef\xbf\xbd')
@@ -402,6 +404,12 @@ class RequestTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(change=change), self.assertRaises(Failure) as caught:
                 await self.read({**base, **change})
             self.assertEqual(caught.exception.result['code'], 'invalid_input')
+        raw = compact({**base, 'limits': {'idleSeconds': 'HUGE'}}).replace('"HUGE"', str(10**400))
+        async def first_line() -> bytes:
+            return (raw + '\n').encode()
+        with self.assertRaises(Failure) as caught:
+            await read_request(parse_arguments(['run', '--request', '-']), {}, first_line, lambda *_: None)
+        self.assertEqual(caught.exception.result['code'], 'invalid_input')
 
 
 class MemoryOutput(Output):

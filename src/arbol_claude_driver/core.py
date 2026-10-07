@@ -62,7 +62,10 @@ def compact(value: Any) -> str:
     if isinstance(value, str):
         return string(value)
     if type(value) in (int, float):
-        numeric = float(value)
+        try:
+            numeric = float(value)
+        except OverflowError:
+            return 'null'
         if not math.isfinite(numeric):
             return 'null'
         if numeric == 0:
@@ -131,7 +134,12 @@ def safe_failure(error: BaseException | None) -> Record:
 
 
 def number(value: Any) -> TypeGuard[int | float]:
-    return type(value) in (int, float) and math.isfinite(value)
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def fixed_wait(milliseconds: float, env: Env | None = None) -> float:
