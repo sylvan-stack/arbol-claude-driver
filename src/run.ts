@@ -19,6 +19,7 @@ import type { Subscriptions } from './subscriptions.js';
 import type { Command } from './arguments.js';
 import type { ProcessEnv } from './types.js';
 import { userInfo } from 'node:os';
+import { ownerMcpArguments } from './owner-tools.js';
 
 export async function run(command: Command, subscriptions: Subscriptions, events: RunEvents,
   env: ProcessEnv, build: string, signal: AbortSignal): Promise<number> {
@@ -51,18 +52,30 @@ export async function run(command: Command, subscriptions: Subscriptions, events
   const temp = join(subscriptions.state.directory, 'tmp', request.runId);
   let error: unknown, cancelled = false, toolSettled = false;
   let stopActive: (() => void) | undefined;
+  let activeProtocol: RunProtocol | undefined;
   const controlTask = command.options.control ? (async () => {
     for await (const line of { [Symbol.asyncIterator]: () => lines! }) {
-      try {
-        const value: unknown = JSON.parse(line);
-        if (isObject(value) && value.type === 'stop') { cancelled = true; stopActive?.(); break; }
-        await events.emit({ type: 'control_refused', error: new Failure('invalid_input', 'This control line is not accepted.', {}, secrets).result,
-          ...(isObject(value) && typeof value.askId === 'string' ? { askId: value.askId } : {}) });
-      } catch {
+      let value: unknown;
+      try { value = JSON.parse(line); }
+      catch {
         await events.emit({ type: 'control_refused', error: new Failure('invalid_input', 'The control line must be JSON.').result });
+        continue;
       }
+      if (isObject(value) && value.type === 'stop') { cancelled = true; stopActive?.(); break; }
+      if (isObject(value) && value.type === 'answer' && typeof value.askId === 'string' && value.askId) {
+        try {
+          if (!activeProtocol) throw new Failure('not_found', 'That question is not open.');
+          if (await activeProtocol.answer(value.askId, value.answer)) { cancelled = true; stopActive?.(); break; }
+        } catch (failure) {
+          if (!(failure instanceof Failure) || !['not_found', 'invalid_input'].includes(failure.result.code)) { error ??= failure; stopActive?.(); break; }
+          await events.emit({ type: 'control_refused', askId: value.askId, error: failure.result });
+        }
+        continue;
+      }
+      await events.emit({ type: 'control_refused', error: new Failure('invalid_input', 'This control line is not accepted.', {}, secrets).result,
+        ...(isObject(value) && typeof value.askId === 'string' ? { askId: value.askId } : {}) });
     }
-    if (!toolSettled) { cancelled = true; stopActive?.(); }
+    if (!toolSettled) { if (!error) cancelled = true; stopActive?.(); }
   })().catch(() => { if (!toolSettled) { cancelled = true; stopActive?.(); } }) : undefined;
   try {
     signal.throwIfAborted();
@@ -70,13 +83,14 @@ export async function run(command: Command, subscriptions: Subscriptions, events
     const cwd = request.workingDirectory ?? join(temp, 'work');
     if (request.workingDirectory === undefined) await privateDirectory(cwd);
     const childEnv = await subscriptions.environment(subscription.id, env, key);
+    const ownerArgs = request.tools === 'all' ? await ownerMcpArguments(env.HOME || userInfo().homedir) : [];
     const launchers = await runLaunchers(temp, env);
     childEnv.CLAUDE_CODE_SHELL = launchers.shell;
     childEnv.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1'; childEnv.BASH_DEFAULT_TIMEOUT_MS = '300000'; childEnv.BASH_MAX_TIMEOUT_MS = '1800000';
     if (request.searchPath.length) childEnv.PATH = (childEnv.PATH ?? '') + delimiter + request.searchPath.join(delimiter);
     await chats.prepare(plan, request, home, cwd);
     for (let attempt = 0; attempt < 2; attempt++) {
-      const child = spawn(launchers.launcher, [tool.path!, ...runArguments(request, plan.conversation, command.options.control === true, plan.resume)], { env: childEnv, cwd, detached: true, stdio: 'pipe' });
+      const child = spawn(launchers.launcher, [tool.path!, ...runArguments(request, plan.conversation, command.options.control === true, plan.resume), ...ownerArgs], { env: childEnv, cwd, detached: true, stdio: 'pipe' });
       let stderr = '', spawnError = false;
       let stopDeadline: number | undefined;
       let cleanup: Promise<number[]> | undefined;
@@ -100,6 +114,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
         await new Promise<void>((resolve, reject) => child.stdin.write(JSON.stringify(record) + '\n', error => error ? reject(new Failure('tool_failed', 'Claude input closed.')) : resolve()));
       };
       const protocol = new RunProtocol(events, request, build, tool.version!, subscription.family, send, plan, command.options.control === true);
+      activeProtocol = protocol;
       let stopTimer: ReturnType<typeof setTimeout> | undefined;
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
       let interruptId: string | undefined;
@@ -173,6 +188,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
         if (!resumeRefused) {
           if (spawnError) throw new Failure('tool_failed', 'Claude could not start.');
           if (protocol.error) throw protocol.error;
+          if (protocol.background && !cancelled) throw new Failure('tool_failed', 'Claude ended while background tasks were still running.');
           if (!protocol.result && !cancelled) throw new Failure('tool_failed', `Claude ended without a result${stderr ? ': ' + stderr : '.'}`, {
             detail: { basis: 'fields', ...(exit.code === null ? {} : { toolExit: exit.code }), ...(stderr ? { excerpt: stderr } : {}) } }, secrets);
           if (!promptSent && !cancelled) throw new Failure('tool_unsupported', 'Claude did not complete its settings handshake.');
@@ -185,7 +201,7 @@ export async function run(command: Command, subscriptions: Subscriptions, events
       finally {
         clearTimeout(startTimer); clearTimeout(stopTimer); clearTimeout(endTimer);
         signal.removeEventListener('abort', stop); events.output.off('error', outputError);
-        stdout.close(); stopActive = undefined;
+        stdout.close(); stopActive = undefined; activeProtocol = undefined;
         kill('SIGKILL');
         try {
           const remaining = await (cleanup ?? endRunGroups(temp, record.tool, stopDeadline));

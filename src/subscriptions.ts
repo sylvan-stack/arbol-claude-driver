@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { userInfo } from 'node:os';
 import { Failure, errno } from './errors.js';
 import type { DriverError } from './errors.js';
@@ -9,6 +9,7 @@ import { ownerAlive, parseOwner, privateDirectory, readJson, writeJson } from '.
 import type { State } from './state.js';
 import { cleanEnvironment } from './environment.js';
 import type { ProcessEnv } from './types.js';
+import { ownerSkills } from './owner-tools.js';
 
 export type FamilyId = 'anthropic' | 'zai';
 export type AuthState = 'signed_out' | 'signing_in' | 'signed_in' | 'needs_attention';
@@ -163,6 +164,7 @@ export class Subscriptions {
           await readJson(join(this.state.subscription(id), 'sign-in.json')) !== undefined) return false;
         const time = new Date().toISOString();
         await privateDirectory(join(this.state.subscription(id), 'home'));
+        await ownerSkills(join(this.state.subscription(id), 'home'), dirname(dirname(this.settingsFile)));
         await writeJson(join(this.state.subscription(id), 'record.json'), { id, family, label,
           auth: family === 'anthropic' ? 'vendor_login' : 'key', state: 'signed_out', createdAt: time, updatedAt: time });
         return true;
@@ -194,6 +196,7 @@ export class Subscriptions {
     const subscription = await this.get(id);
     const home = join(this.state.subscription(id), 'home');
     await privateDirectory(home);
+    await this.state.withSubscriptionLock(id, () => ownerSkills(home, inherited.HOME || userInfo().homedir));
     const env = cleanEnvironment(inherited, userInfo().homedir, home);
     if (subscription.family === 'zai') {
       if (!key) throw new Failure('not_signed_in', 'The Subscription has no key.', { remedy: 'Sign in.' });
