@@ -1,12 +1,14 @@
 import { continuityStandIn } from './continuity-stand-in.js';
 import { stopStandIn } from './stop-stand-in.js';
 import { toolsStandIn } from './tools-stand-in.js';
+import { errorsStandIn } from './errors-stand-in.js';
 import { readFile, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { subscriptionProtocol } from './subscription-protocol.js';
-export const runScenarios = ['C9', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20', 'C25', 'C33', 'C35', 'C36', 'C37', 'C38', 'C40', 'C42', 'C43'];
+export const runScenarios = ['C4', 'C26', 'C27', 'C28', 'C29', 'C30', 'C9', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20', 'C25', 'C33', 'C35', 'C36', 'C37', 'C38', 'C40', 'C42', 'C43'];
 export async function runStandIn(folder: string, args: string[], scenario: string, part: string): Promise<number> {
+  if (['C4', 'C26', 'C27', 'C28', 'C29', 'C30'].includes(scenario)) return errorsStandIn(folder, args, scenario, part);
   if (scenario === 'C14') return continuityStandIn(folder, args, part);
   if (['C9', 'C25', 'C35', 'C36', 'C37'].includes(scenario) || scenario === 'C33' && part === 'question') return toolsStandIn(folder, args, scenario, part);
   if (['C15', 'C16', 'C17', 'C38'].includes(scenario) || scenario === 'C33' && part === 'stopping') return stopStandIn(folder, args, scenario, part === 'stopping' ? 'hold' : part);
