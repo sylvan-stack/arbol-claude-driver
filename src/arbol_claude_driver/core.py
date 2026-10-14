@@ -284,7 +284,7 @@ def read_settings(file: Path) -> tuple[Record, list[Record]]:
     def unknown(value: Record, known: list[str], prefix: str) -> None:
         for key in value:
             if key not in known:
-                notices.append({'code': 'unknown_setting', 'message': f'Ignoring unknown setting {prefix}{key} in {file}.'})
+                raise Failure('invalid_input', f'Settings file {file}: unknown field {prefix}{key}.')
 
     def strings(value: Record, keys: list[str], prefix: str) -> Record:
         result: Record = {}

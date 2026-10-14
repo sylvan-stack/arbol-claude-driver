@@ -127,10 +127,26 @@ class CompatibilityTests(unittest.TestCase):
                 self.assertEqual(family_settings('zai', value, 'settings.', []), value)
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / 'settings.json'
-            file.write_text('{"unknown":"secret-value","subscriptions":{"zai":{"settings":{"extra":"secret-value"}}}}')
+            file.write_text('{"subscriptions":{"zai":{"settings":{"extra":"secret-value"}}}}')
             settings, notices = read_settings(file)
-            family_settings('zai', settings['subscriptions']['zai']['settings'], 'zai.', notices)
-            self.assertNotIn('secret-value', compact(notices))
+            self.assertEqual(notices, [])
+            for text, field in [('{"unknown":"secret-value"}', 'unknown'), ('{"defaultSubscripton":"secret-value"}', 'defaultSubscripton'),
+                                ('{"subscriptions":{"zai":{"defaultModle":"secret-value"}}}', 'subscriptions.zai.defaultModle'),
+                                ('{"subscriptions":{"zai":{"secret":{"from":"keychain","account":"secret-value"}}}}', 'subscriptions.zai.secret.account')]:
+                file.write_text(text)
+                with self.subTest(field=field), self.assertRaises(Failure) as caught:
+                    read_settings(file)
+                self.assertEqual(caught.exception.result['code'], 'invalid_input')
+                self.assertIn(f'{file}: unknown field {field}.', compact(caught.exception.result))
+                self.assertNotIn('secret-value', compact(caught.exception.result))
+        unknown_names: list[tuple[str, dict[str, Any], str]] = [('zai', {'extra': 'secret-value'}, 'extra'), ('zai', {'modelMap': {'tiny': 'secret-value'}}, 'modelMap.tiny'),
+                                                                 ('anthropic', {'baseUrl': 'secret-value'}, 'baseUrl')]
+        for family, given, field in unknown_names:
+            with self.subTest(family=family, field=field), self.assertRaises(Failure) as caught:
+                family_settings(family, given, 'settings.', [])
+            self.assertEqual(caught.exception.result['code'], 'invalid_input')
+            self.assertIn(f'Unknown setting settings.{field}.', compact(caught.exception.result))
+            self.assertNotIn('secret-value', compact(caught.exception.result))
         env = clean_environment({'HOME': '/wrong', 'PATH': '/bin', 'LANG': 'C', 'ANTHROPIC_AUTH_TOKEN': 'secret', 'AWS_SECRET_ACCESS_KEY': 'secret', 'NODE_OPTIONS': 'bad'}, '/account', '/config')
         self.assertEqual(env['HOME'], '/account')
         self.assertEqual(env['CLAUDE_CONFIG_DIR'], '/config')

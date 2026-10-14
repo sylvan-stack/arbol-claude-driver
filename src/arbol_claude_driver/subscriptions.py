@@ -41,8 +41,8 @@ def family_settings(family: str, value: Record, prefix: str, notices: list[Recor
     def fail(field: str) -> NoReturn:
         raise Failure('invalid_input', f'Invalid setting {prefix}{field}.')
 
-    def unknown(field: str) -> None:
-        notices.append({'code': 'unknown_setting', 'message': f'Ignoring unknown setting {prefix}{field}.'})
+    def unknown(field: str) -> NoReturn:
+        raise Failure('invalid_input', f'Unknown setting {prefix}{field}.')
 
     if family == 'anthropic':
         for key in value:
@@ -75,7 +75,6 @@ def family_settings(family: str, value: Record, prefix: str, notices: list[Recor
                 if key == 'toolEnvironment':
                     fail(f'{key}.{name}')
                 unknown(f'{key}.{name}')
-                continue
             if not isinstance(item, str) or (key == 'modelMap' and not item):
                 fail(f'{key}.{name}')
             clean[name] = item
