@@ -6,6 +6,7 @@ import os
 import signal
 import shlex
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -20,7 +21,7 @@ from arbol_claude_driver.core import Failure, Record, clean_environment, compact
 from arbol_claude_driver.history import MessageDigest, digest, encode_folder, result_text, session_lines  # noqa: E402
 from arbol_claude_driver.dev import live_check  # noqa: E402
 from arbol_claude_driver.models import ValidatedRequest  # noqa: E402
-from arbol_claude_driver.processes import child_command, python_launcher, remaining_groups, supported_version  # noqa: E402
+from arbol_claude_driver.processes import child_command, kill_group, python_launcher, remaining_groups, supported_version  # noqa: E402
 from arbol_claude_driver.protocol import Output, RunEvents, RunProtocol, run_failure, truncate_result  # noqa: E402
 from arbol_claude_driver.request import read_request, run_arguments  # noqa: E402
 from arbol_claude_driver.state import State, owner_alive, parse_owner, process_owner, read_json, write_json  # noqa: E402
@@ -178,6 +179,20 @@ class CompatibilityTests(unittest.TestCase):
         self.assertTrue(supported_version('2.1.289'))
         self.assertFalse(supported_version('2.1.288'))
         self.assertFalse(supported_version('2.1.289-beta'))
+
+
+class ProcessGroupTests(unittest.TestCase):
+    def test_a_group_that_has_exited_but_is_not_reaped_is_ending(self) -> None:
+        # macOS answers EPERM for such a group; the run must not fail with internal (C29, 14 October 2026).
+        child = subprocess.Popen(['/usr/bin/true'], start_new_session=True)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and subprocess.run(['/bin/ps', '-o', 'stat=', '-p', str(child.pid)], capture_output=True, text=True).stdout.strip()[:1] != 'Z':
+            time.sleep(.01)
+        try:
+            kill_group(child.pid, signal.SIGKILL)
+        finally:
+            child.wait()
+        kill_group(child.pid, signal.SIGKILL)
 
 
 class StateTests(unittest.IsolatedAsyncioTestCase):

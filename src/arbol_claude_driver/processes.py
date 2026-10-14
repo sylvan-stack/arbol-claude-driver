@@ -30,7 +30,9 @@ def python_launcher(path: Path, code: str, interpreter: str | None = None) -> No
 def kill_group(pid: int, name: signal.Signals) -> None:
     try:
         os.killpg(pid, name)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
+        # macOS answers EPERM for a group whose processes have exited but are not yet reaped.
+        # The group is ending; the verified cleanup after it reports one that remains.
         pass
 
 
