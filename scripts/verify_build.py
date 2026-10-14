@@ -54,7 +54,7 @@ def response(arguments: list[str], cwd: Path, env: dict[str, str], expected: int
     return value
 
 
-def verify(candidate: Path, arbol: Path, node: str) -> dict[str, Any]:
+def verify(candidate: Path, arbol: Path) -> dict[str, Any]:
     manifest = verify_package(candidate, True)
     version, _ = metadata(candidate)
     report: dict[str, Any] = {"check": "migration.offline-build-rehearsal", "at": datetime.now(UTC).isoformat(),
@@ -64,7 +64,7 @@ def verify(candidate: Path, arbol: Path, node: str) -> dict[str, Any]:
         repo, registry, binary, home = (temporary / part for part in ("repo", "registry", "bin", "home"))
         repo.mkdir()
         home.mkdir()
-        env = {"HOME": str(home), "PATH": str(Path(node).parent) + ":/usr/bin:/bin", "LANG": "C"}
+        env = {"HOME": str(home), "PATH": "/usr/bin:/bin", "LANG": "C"}
         relocated = temporary / "relocated candidate"
         shutil.copytree(candidate, relocated, symlinks=True)
         direct = response([str(relocated / ENTRY), "info"], temporary, env)
@@ -98,7 +98,8 @@ def verify(candidate: Path, arbol: Path, node: str) -> dict[str, Any]:
             result = command(arguments, repo, env)
             if result.returncode:
                 raise ValueError(result.stderr)
-        tool = [node, str(arbol / "builds/bin/arbol-builds.mjs"), "--registry-dir", str(registry), "--bin-dir", str(binary)]
+        # The Python arbol-builds of the arbol checkout (SYL-165); its launchers need no Node.js.
+        tool = [str(arbol / "bin/arbol-builds"), "--registry-dir", str(registry), "--bin-dir", str(binary)]
         builds = [response([*tool, "build", COMPONENT, "--repo", str(repo)], temporary, env) for _ in range(2)]
         if [record.get("status") for record in builds] != ["working", "working"]:
             raise ValueError("Isolated synthetic checks must create two runnable rehearsal Builds.")
@@ -106,7 +107,7 @@ def verify(candidate: Path, arbol: Path, node: str) -> dict[str, Any]:
         for expected, arguments in (("2", ["info"]), ("1", ["-v", "1", "info"])):
             info = response([launcher, *arguments], temporary, env)
             if info.get("build") != expected or info.get("version") != version:
-                raise ValueError("The unchanged launcher selected the wrong Build identity.")
+                raise ValueError("The launcher selected the wrong Build identity.")
         report["checks"].append({"check": "build.launcher-default-and-named", "passed": True})
         config["checks"].insert(0, {"name": "rehearsal.intentional-failure", "kind": "unit",
                                      "command": f'"$ARBOL_BUILD_DIR/{ENTRY}" definitely-invalid-command'})
@@ -118,9 +119,11 @@ def verify(candidate: Path, arbol: Path, node: str) -> dict[str, Any]:
             raise ValueError("The deliberately failed Build changed the prior default.")
         if not (registry / COMPONENT / "3/build.log").is_file():
             raise ValueError("The failed Build must retain its log.")
-        refused = response([launcher, "-v", "3", "info"], temporary, env, 1)
-        if "3" in refused.get("error", {}).get("available", []):
-            raise ValueError("A failed Build must not be runnable.")
+        # BLD-D13: a failed Build named with -v starts, and says on standard error which step failed.
+        named = command([launcher, "-v", "3", "info"], temporary, env)
+        failed_line = f"{COMPONENT}@3 is failed: check rehearsal.intentional-failure: Check failed; see build.log.\n"
+        if named.returncode != 0 or json.loads(named.stdout).get("build") != "3" or named.stderr != failed_line:
+            raise ValueError(f"A failed Build named with -v must start and name its failed step: {named.stderr!r}")
         report["checks"].append({"check": "build.failed-check-preserves-default", "passed": True})
         withdrawn = response([*tool, "withdraw", f"{COMPONENT}@2", "--reason", "Isolated migration rollback rehearsal"], temporary, env)
         if withdrawn.get("status") != "withdrawn":
@@ -138,13 +141,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate", required=True)
     parser.add_argument("--arbol-repo", default=str(ROOT.parent / "arbol"))
-    parser.add_argument("--node", default=shutil.which("node"))
     parser.add_argument("--output", required=True)
     arguments = parser.parse_args()
     try:
-        if not arguments.node:
-            raise ValueError("Select Node.js 24 with --node for the unchanged shared build machinery.")
-        report = verify(Path(arguments.candidate).resolve(strict=True), Path(arguments.arbol_repo).resolve(strict=True), arguments.node)
+        report = verify(Path(arguments.candidate).resolve(strict=True), Path(arguments.arbol_repo).resolve(strict=True))
         Path(arguments.output).write_text(json.dumps(report, indent=2) + "\n")
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         print(f"Build rehearsal failed: {error}", file=sys.stderr)

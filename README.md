@@ -22,7 +22,7 @@ The 35 offline unit tests cover validated request and error boundaries, the reco
 arbol-conformance --driver ./bin/arbol-claude-driver
 ```
 
-Shared conformance and `arbol-builds` are external tools from the `arbol` repository and still use Node 24. They are not required to execute the Driver. Offline tests use temporary state and homes, synthetic credentials, and loopback listeners; they submit no live inference request.
+Shared conformance and `arbol-builds` are external tools from the `arbol` repository. `arbol-builds` and its launchers are typed Python since SYL-165; the conformance suite still uses Node 24 until SYL-166. They are not required to execute the Driver. Offline tests use temporary state and homes, synthetic credentials, and loopback listeners; they submit no live inference request.
 
 ## Commands and state
 
@@ -61,7 +61,7 @@ arbol-claude-driver -v 1 info
 
 The installed launcher selects the newest working Build. Numbered records and logs live under `~/Library/Application Support/Arbol/builds/arbol-claude-driver/`. Every production Build runs its own packaged unit suite, all 38 shared contract scenarios, then exactly one tools-off Haiku message through `dev build-check`. `ARBOL_CONFORMANCE_REPO` selects another shared-suite checkout; The check finds the signed-in `test-anthropic` in its own test state directory, `~/Library/Application Support/Arbol/drivers/arbol-claude-driver/`, not in the default one; `ARBOL_BUILD_TEST_STATE_DIR` names another (DRV-D41). Missing login, exhausted usage or failed checks preserve the numbered record and previous working default. Account state and credentials are never packaged.
 
-`scripts/package_build.py --candidate /absolute/empty/folder` creates an offline artifact for review. `scripts/verify_build.py --candidate <folder> --arbol-repo <arbol-repo> --node <node24-executable> --output <evidence.json>` rehearses relocation, default/named launchers, failed-check retention and withdrawal with synthetic registry checks and zero vendor prompts. These checks supplement the production descriptor's actual gates.
+`scripts/package_build.py --candidate /absolute/empty/folder` creates an offline artifact for review. `scripts/verify_build.py --candidate <folder> --arbol-repo <arbol-repo> --output <evidence.json>` rehearses relocation, default/named launchers, failed-check retention and withdrawal with synthetic registry checks and zero vendor prompts. These checks supplement the production descriptor's actual gates.
 
 ## Development checks and evidence
 
