@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import pwd
 import sys
 import tempfile
 import unittest
@@ -64,6 +65,21 @@ class PackagingTests(unittest.TestCase):
             with patch.dict(os.environ, {"ARBOL_BUILD_DIR": name, "ARBOL_BUILD_NUMBER": "b"}), patch.object(build_support, "metadata", return_value=("1.0.0", {})):
                 with self.assertRaisesRegex(ValueError, "executable entry"):
                     build_support.build_folder()
+
+    def test_live_gate_uses_the_test_state_directory(self) -> None:
+        home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+        environment = {key: value for key, value in os.environ.items() if key != "ARBOL_BUILD_TEST_STATE_DIR"}
+        with patch.dict(os.environ, environment, clear=True), patch.object(check_build, "run", return_value=0) as execute:
+            self.assertEqual(check_build.live(Path("/tmp/candidate")), 0)
+        self.assertEqual(execute.call_args.args[0][1:], ["dev", "build-check", "--state-dir", str(home / "Library/Application Support/Arbol/drivers/arbol-claude-driver")])
+        with patch.dict(os.environ, {"ARBOL_BUILD_TEST_STATE_DIR": "/tmp/other state"}), patch.object(check_build, "run", return_value=0) as execute:
+            check_build.live(Path("/tmp/candidate"))
+        self.assertEqual(execute.call_args.args[0][-1], "/tmp/other state")
+        for directory in ("", "relative/state"):
+            with self.subTest(directory=directory), patch.dict(os.environ, {"ARBOL_BUILD_TEST_STATE_DIR": directory}), patch.object(check_build, "run") as execute:
+                with self.assertRaisesRegex(ValueError, "absolute test state"):
+                    check_build.live(Path("/tmp/candidate"))
+                execute.assert_not_called()
 
     def test_unit_gate_refuses_an_empty_suite(self) -> None:
         with tempfile.TemporaryDirectory() as name:

@@ -91,12 +91,13 @@ def contract(folder: Path) -> int:
 
 
 def live(folder: Path) -> int:
-    state = os.environ.get("ARBOL_BUILD_TEST_STATE_DIR")
-    if state is not None and (not state or not Path(state).is_absolute()):
-        raise ValueError("ARBOL_BUILD_TEST_STATE_DIR must be an absolute test state directory.")
     home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    # The test Subscriptions live in a state directory of their own, not in the default one (DRV-D41).
+    state = os.environ.get("ARBOL_BUILD_TEST_STATE_DIR", str(home / "Library/Application Support/Arbol/drivers/arbol-claude-driver"))
+    if not state or not Path(state).is_absolute():
+        raise ValueError("ARBOL_BUILD_TEST_STATE_DIR must be an absolute test state directory.")
     env = {"HOME": str(home), "PATH": f"{home / '.local/bin'}:/usr/bin:/bin", "LANG": os.environ.get("LANG", "C")}
-    return run([str(folder / ENTRY), "dev", "build-check", *(["--state-dir", state] if state else [])], cwd=folder, env=env)
+    return run([str(folder / ENTRY), "dev", "build-check", "--state-dir", state], cwd=folder, env=env)
 
 
 def main() -> int:
