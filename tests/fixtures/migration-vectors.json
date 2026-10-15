@@ -4,7 +4,7 @@
   "node": "v24.21.0",
   "drivers": {
     "claude": {
-      "commit": "89322877059cb0cdeb6f549d6338d3863adce710",
+      "commit": "5ea45f2a04d7d8900547001159696114eeeb8e3f",
       "worktree": ""
     },
     "codex": {
