@@ -12,3 +12,6 @@ __pycache__/
 *.py[cod]
 .mypy_cache/
 .ruff_cache/
+
+# Results of tests, probes and checks stay on this machine (owner, 15 October 2026).
+test/
