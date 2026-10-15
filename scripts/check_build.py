@@ -7,7 +7,6 @@ import json
 import os
 import pwd
 import shlex
-import shutil
 import subprocess
 import sys
 import unittest
@@ -73,21 +72,9 @@ def contract(folder: Path) -> int:
     repo = Path(os.environ.get("ARBOL_CONFORMANCE_REPO", str(Path.home() / "repos/sylvan-stack/arbol"))).resolve()
     if read_object(repo / "package.json").get("name") != "@sylvan-stack/arbol":
         raise ValueError("ARBOL_CONFORMANCE_REPO must name the Arbol repository.")
-    node = os.environ.get("ARBOL_NODE") or shutil.which("node")
-    npm = shutil.which("npm")
-    if not node or not npm:
-        raise ValueError("Contract checks require Node.js 24 and npm for the unchanged shared conformance suite.")
-    node_version = subprocess.run([node, "--version"], check=True, capture_output=True, text=True).stdout
-    if int(node_version.strip().lstrip("v").split(".")[0]) < 24:
-        raise ValueError("The shared conformance suite requires Node.js 24 or later.")
-    env = dict(os.environ)
-    env["PATH"] = str(Path(node).parent) + os.pathsep + env.get("PATH", "/usr/bin:/bin")
-    for arguments in ([npm, "ci"], [npm, "run", "build"]):
-        code = run(arguments, cwd=repo, env=env)
-        if code:
-            return code
-    return run([node, str(repo / "conformance/bin/arbol-conformance.mjs"), "--driver", shlex.quote(str(folder / ENTRY))],
-               cwd=folder, env=env)
+    # The shared suite is standard-library Python; the Build's own interpreter runs it, with nothing to install.
+    return run([str(folder / "runtime/python/bin/python3.14"), "-I", "-B", str(repo / "conformance/bin/arbol-conformance.py"),
+                "--driver", shlex.quote(str(folder / ENTRY))], cwd=folder)
 
 
 def live(folder: Path) -> int:

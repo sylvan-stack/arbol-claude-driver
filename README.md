@@ -19,10 +19,10 @@ The source executable directly executes `.venv/bin/python` in isolated mode and 
 The 35 offline unit tests cover validated request and error boundaries, the recorded Node 24 history and JSON fingerprints, UTF-16 path encoding, Keychain identity, native history, durable state, concurrent ownership, recovery protection, asynchronous transports and bounded cleanup, sign-in replacement, quoted helpers under spaced interpreter paths, protocol questions/usage, and failed development-check spending. The shared contract suite adds all 38 CLI scenarios, using this executable's Python stand-in:
 
 ```sh
-arbol-conformance --driver ./bin/arbol-claude-driver
+.venv/bin/python -I -B ../arbol/conformance/bin/arbol-conformance.py --driver ./bin/arbol-claude-driver
 ```
 
-Shared conformance and `arbol-builds` are external tools from the `arbol` repository. `arbol-builds` and its launchers are typed Python since SYL-165; the conformance suite still uses Node 24 until SYL-166. They are not required to execute the Driver. Offline tests use temporary state and homes, synthetic credentials, and loopback listeners; they submit no live inference request.
+Shared conformance and `arbol-builds` are external tools from the `arbol` repository. `arbol-builds`, its launchers and the conformance suite are typed Python (SYL-165, SYL-166) and need no Node.js. They are not required to execute the Driver. Offline tests use temporary state and homes, synthetic credentials, and loopback listeners; they submit no live inference request.
 
 ## Commands and state
 
