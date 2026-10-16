@@ -14,4 +14,10 @@ __pycache__/
 .ruff_cache/
 
 # Results of tests, probes and checks stay on this machine (owner, 15 October 2026).
-test/
+# The protocol records the stand-in reads are fixtures and are tracked (CLD-D15, SYL-210).
+test/*
+!test/continuity-probe-2026-10-07.json
+!test/errors-probe-2026-10-07.json
+!test/errors-protocol-2026-10-07.json
+!test/run-protocol-2026-10-06.json
+!test/subscription-protocol-2026-10-06.json
