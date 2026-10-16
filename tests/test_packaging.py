@@ -81,6 +81,20 @@ class PackagingTests(unittest.TestCase):
                     check_build.live(Path("/tmp/candidate"))
                 execute.assert_not_called()
 
+    def test_contract_gate_takes_the_suite_from_readonly(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            home, other = Path(name).resolve() / "home", Path(name).resolve() / "other checkout"
+            for repo in (home / "repos/sylvan-stack/readonly/arbol", other):
+                repo.mkdir(parents=True)
+                (repo / "package.json").write_text(json.dumps({"name": "@sylvan-stack/arbol"}))
+            environment = {key: value for key, value in os.environ.items() if key != "ARBOL_CONFORMANCE_REPO"}
+            with patch.dict(os.environ, {**environment, "HOME": str(home)}, clear=True), patch.object(check_build, "run", return_value=0) as execute:
+                self.assertEqual(check_build.contract(Path("/tmp/candidate")), 0)
+            self.assertEqual(execute.call_args.args[0][3], str(home / "repos/sylvan-stack/readonly/arbol/conformance/bin/arbol-conformance.py"))
+            with patch.dict(os.environ, {"HOME": str(home), "ARBOL_CONFORMANCE_REPO": str(other)}), patch.object(check_build, "run", return_value=0) as execute:
+                check_build.contract(Path("/tmp/candidate"))
+            self.assertEqual(execute.call_args.args[0][3], str(other / "conformance/bin/arbol-conformance.py"))
+
     def test_unit_gate_refuses_an_empty_suite(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             folder = Path(name)
