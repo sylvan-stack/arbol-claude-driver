@@ -1,0 +1,264 @@
+{
+  "check": "probe.errors",
+  "at": "2026-10-07T08:49:18.229Z",
+  "toolVersion": "2.1.289 (Claude Code)",
+  "outcome": "passed",
+  "inferenceRequests": 0,
+  "rawLoginFailure": {
+    "retries": [],
+    "assistant": {
+      "type": "assistant",
+      "error": "authentication_failed",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Not logged in · Please run /login"
+          }
+        ]
+      }
+    },
+    "result": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": true,
+      "terminal_reason": "api_error",
+      "api_error_status": null,
+      "result": "Not logged in · Please run /login"
+    }
+  },
+  "rawRejectedKey": {
+    "retries": [
+      {
+        "type": "system",
+        "subtype": "api_retry",
+        "attempt": 1,
+        "max_retries": 1,
+        "retry_delay_ms": 597,
+        "error_status": 401,
+        "error": "authentication_failed"
+      }
+    ],
+    "assistant": {
+      "type": "assistant",
+      "error": "authentication_failed",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Failed to authenticate. API Error: 401 Synthetic local rejected key"
+          }
+        ]
+      }
+    },
+    "result": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": true,
+      "terminal_reason": "api_error",
+      "api_error_status": 401,
+      "result": "Failed to authenticate. API Error: 401 Synthetic local rejected key"
+    }
+  },
+  "checks": [
+    {
+      "name": "fresh-home",
+      "events": [
+        {
+          "runId": "15eef192-2b3c-4eee-b599-8906370e387b",
+          "seq": 1,
+          "at": "2026-10-07T08:49:11.016Z",
+          "type": "started",
+          "continuity": "fresh",
+          "subscriptionId": "probe-anthropic",
+          "model": "claude-haiku-4-5-20251001",
+          "toolVersion": "2.1.289",
+          "driverBuild": "0"
+        },
+        {
+          "runId": "15eef192-2b3c-4eee-b599-8906370e387b",
+          "seq": 2,
+          "at": "2026-10-07T08:49:11.042Z",
+          "type": "usage",
+          "usage": {
+            "inputTokens": 0,
+            "cachedInputTokens": 0,
+            "outputTokens": 0,
+            "reasoningTokens": 0
+          }
+        },
+        {
+          "runId": "15eef192-2b3c-4eee-b599-8906370e387b",
+          "seq": 3,
+          "at": "2026-10-07T08:49:11.406Z",
+          "type": "finished",
+          "outcome": "failed",
+          "error": {
+            "detail": {
+              "basis": "fields",
+              "toolVersion": "2.1.289",
+              "vendorCode": "authentication_failed"
+            },
+            "remedy": "Sign in again.",
+            "code": "credential_rejected",
+            "message": "Not logged in · Please run /login",
+            "retryable": false
+          },
+          "usage": {
+            "inputTokens": 0,
+            "cachedInputTokens": 0,
+            "outputTokens": 0,
+            "reasoningTokens": 0
+          },
+          "producedOutput": false,
+          "unfinishedCalls": []
+        }
+      ],
+      "state": "needs_attention"
+    },
+    {
+      "name": "vendor-unreachable",
+      "events": [
+        {
+          "runId": "f2323395-3f8c-4c06-90b8-3cb4d8964daa",
+          "seq": 1,
+          "at": "2026-10-07T08:49:11.889Z",
+          "type": "started",
+          "continuity": "fresh",
+          "subscriptionId": "test-anthropic",
+          "model": "claude-haiku-4-5-20251001",
+          "toolVersion": "2.1.289",
+          "driverBuild": "0"
+        },
+        {
+          "runId": "f2323395-3f8c-4c06-90b8-3cb4d8964daa",
+          "seq": 2,
+          "at": "2026-10-07T08:49:11.900Z",
+          "type": "notice",
+          "code": "api_retry",
+          "message": "Claude is retrying (attempt 1 of 3, delay 552 ms)."
+        },
+        {
+          "runId": "f2323395-3f8c-4c06-90b8-3cb4d8964daa",
+          "seq": 3,
+          "at": "2026-10-07T08:49:12.455Z",
+          "type": "notice",
+          "code": "api_retry",
+          "message": "Claude is retrying (attempt 2 of 3, delay 1166 ms)."
+        },
+        {
+          "runId": "f2323395-3f8c-4c06-90b8-3cb4d8964daa",
+          "seq": 4,
+          "at": "2026-10-07T08:49:13.625Z",
+          "type": "notice",
+          "code": "api_retry",
+          "message": "Claude is retrying (attempt 3 of 3, delay 2160 ms)."
+        },
+        {
+          "runId": "f2323395-3f8c-4c06-90b8-3cb4d8964daa",
+          "seq": 5,
+          "at": "2026-10-07T08:49:15.791Z",
+          "type": "usage",
+          "usage": {
+            "inputTokens": 0,
+            "cachedInputTokens": 0,
+            "outputTokens": 0,
+            "reasoningTokens": 0
+          }
+        },
+        {
+          "runId": "f2323395-3f8c-4c06-90b8-3cb4d8964daa",
+          "seq": 6,
+          "at": "2026-10-07T08:49:16.325Z",
+          "type": "finished",
+          "outcome": "failed",
+          "error": {
+            "detail": {
+              "basis": "fields",
+              "toolVersion": "2.1.289",
+              "vendorCode": "server_error"
+            },
+            "code": "vendor_unavailable",
+            "message": "API Error: Connection refused — a firewall or proxy may be blocking it (ECONNREFUSED)",
+            "retryable": true
+          },
+          "usage": {
+            "inputTokens": 0,
+            "cachedInputTokens": 0,
+            "outputTokens": 0,
+            "reasoningTokens": 0
+          },
+          "producedOutput": false,
+          "unfinishedCalls": []
+        }
+      ],
+      "state": "signed_in"
+    },
+    {
+      "name": "first-rejected-retry",
+      "events": [
+        {
+          "runId": "bc9e0847-2a5b-4903-af74-061d60db57e0",
+          "seq": 1,
+          "at": "2026-10-07T08:49:17.870Z",
+          "type": "started",
+          "continuity": "fresh",
+          "subscriptionId": "local-zai",
+          "model": "claude-haiku-4-5-20251001",
+          "toolVersion": "2.1.289",
+          "driverBuild": "0"
+        },
+        {
+          "runId": "bc9e0847-2a5b-4903-af74-061d60db57e0",
+          "seq": 2,
+          "at": "2026-10-07T08:49:17.879Z",
+          "type": "notice",
+          "code": "api_retry",
+          "message": "Claude is retrying (attempt 1 of 3, delay 572 ms, vendor status 401)."
+        },
+        {
+          "runId": "bc9e0847-2a5b-4903-af74-061d60db57e0",
+          "seq": 3,
+          "at": "2026-10-07T08:49:17.909Z",
+          "type": "usage",
+          "usage": {
+            "inputTokens": 0,
+            "cachedInputTokens": 0,
+            "outputTokens": 0,
+            "reasoningTokens": 0
+          }
+        },
+        {
+          "runId": "bc9e0847-2a5b-4903-af74-061d60db57e0",
+          "seq": 4,
+          "at": "2026-10-07T08:49:18.183Z",
+          "type": "finished",
+          "outcome": "failed",
+          "error": {
+            "detail": {
+              "basis": "fields",
+              "toolVersion": "2.1.289",
+              "vendorCode": "authentication_failed",
+              "vendorStatus": 401
+            },
+            "remedy": "Replace the key.",
+            "code": "credential_rejected",
+            "message": "Claude reports a rejected credential while retrying.",
+            "retryable": false
+          },
+          "usage": {
+            "inputTokens": 0,
+            "cachedInputTokens": 0,
+            "outputTokens": 0,
+            "reasoningTokens": 0
+          },
+          "producedOutput": false,
+          "unfinishedCalls": []
+        }
+      ],
+      "state": "needs_attention"
+    }
+  ],
+  "ownerConfigurationUnchanged": true,
+  "ownerSnapshotChanges": []
+}

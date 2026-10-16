@@ -1,0 +1,167 @@
+{
+  "check": "probe.continuity",
+  "at": "2026-10-06T23:06:17.218Z",
+  "toolVersion": "2.1.289 (Claude Code)",
+  "inferenceRequests": 0,
+  "missingConversation": {
+    "code": 1,
+    "stdout": "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"duration_ms\":0,\"duration_api_ms\":0,\"is_error\":true,\"num_turns\":0,\"stop_reason\":null,\"session_id\":\"86cf1e51-5035-4ec5-99ee-168734e0caea\",\"total_cost_usd\":0,\"usage\":{\"output_tokens_details\":{\"thinking_tokens\":0},\"input_tokens\":0,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":0,\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"\",\"iterations\":[],\"speed\":\"standard\",\"fallback_credit\":null},\"modelUsage\":{},\"permission_denials\":[],\"uuid\":\"9ef326fa-d9b3-466d-a1a0-aef63543b055\",\"errors\":[\"No conversation found with session ID: 86cf1e51-5035-4ec5-99ee-168734e0caea\"],\"result_index\":0}\n",
+    "stderr": "No conversation found with session ID: 86cf1e51-5035-4ec5-99ee-168734e0caea\n",
+    "records": [
+      {
+        "type": "result",
+        "subtype": "error_during_execution",
+        "duration_ms": 0,
+        "duration_api_ms": 0,
+        "is_error": true,
+        "num_turns": 0,
+        "stop_reason": null,
+        "session_id": "86cf1e51-5035-4ec5-99ee-168734e0caea",
+        "total_cost_usd": 0,
+        "usage": {
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "input_tokens": 0,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 0,
+          "server_tool_use": {
+            "web_search_requests": 0,
+            "web_fetch_requests": 0
+          },
+          "service_tier": "standard",
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0
+          },
+          "inference_geo": "",
+          "iterations": [],
+          "speed": "standard",
+          "fallback_credit": null
+        },
+        "modelUsage": {},
+        "permission_denials": [],
+        "uuid": "9ef326fa-d9b3-466d-a1a0-aef63543b055",
+        "errors": [
+          "No conversation found with session ID: 86cf1e51-5035-4ec5-99ee-168734e0caea"
+        ],
+        "result_index": 0
+      }
+    ]
+  },
+  "syntheticSessionAccepted": true,
+  "syntheticRecords": [
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Remember probe."
+          }
+        ]
+      },
+      "uuid": "881a49fb-c968-4fec-ac92-2d18b59b9657",
+      "parentUuid": null,
+      "timestamp": "2026-10-06T23:05:13.756Z",
+      "sessionId": "c6ed4134-4481-49f1-949f-591c4265f578",
+      "cwd": "/var/folders/2q/l86hj4950s3468xgx0s9rv2h0000gn/T/syl82-probe-FRX3tZ",
+      "isSidechain": false,
+      "userType": "external",
+      "version": "synthetic-arbol"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_e04f33cef4a43b9627af73fa",
+            "name": "Bash",
+            "input": {
+              "command": "printf fixture"
+            }
+          }
+        ]
+      },
+      "uuid": "4ef83925-dbab-444a-b92b-5ea615b850d8",
+      "parentUuid": "881a49fb-c968-4fec-ac92-2d18b59b9657",
+      "timestamp": "2026-10-06T23:05:14.756Z",
+      "sessionId": "c6ed4134-4481-49f1-949f-591c4265f578",
+      "cwd": "/var/folders/2q/l86hj4950s3468xgx0s9rv2h0000gn/T/syl82-probe-FRX3tZ",
+      "isSidechain": false,
+      "userType": "external",
+      "version": "synthetic-arbol"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "toolu_e04f33cef4a43b9627af73fa",
+            "content": "fixture\nexit code: 2\nprobe error",
+            "is_error": true
+          }
+        ]
+      },
+      "uuid": "73404463-74b3-4c28-989a-17f619da8d2c",
+      "parentUuid": "4ef83925-dbab-444a-b92b-5ea615b850d8",
+      "timestamp": "2026-10-06T23:05:15.756Z",
+      "sessionId": "c6ed4134-4481-49f1-949f-591c4265f578",
+      "cwd": "/var/folders/2q/l86hj4950s3468xgx0s9rv2h0000gn/T/syl82-probe-FRX3tZ",
+      "isSidechain": false,
+      "userType": "external",
+      "version": "synthetic-arbol"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Recorded."
+          }
+        ]
+      },
+      "uuid": "368553fa-a61d-4854-b265-33ce82453ff0",
+      "parentUuid": "73404463-74b3-4c28-989a-17f619da8d2c",
+      "timestamp": "2026-10-06T23:05:16.756Z",
+      "sessionId": "c6ed4134-4481-49f1-949f-591c4265f578",
+      "cwd": "/var/folders/2q/l86hj4950s3468xgx0s9rv2h0000gn/T/syl82-probe-FRX3tZ",
+      "isSidechain": false,
+      "userType": "external",
+      "version": "synthetic-arbol"
+    },
+    {
+      "type": "atis-latch",
+      "atis": "",
+      "sessionId": "c6ed4134-4481-49f1-949f-591c4265f578"
+    },
+    {
+      "type": "mode",
+      "mode": "normal",
+      "sessionId": "c6ed4134-4481-49f1-949f-591c4265f578"
+    },
+    {
+      "type": "cost-state",
+      "sessionId": "c6ed4134-4481-49f1-949f-591c4265f578",
+      "totalCostUSD": 0,
+      "totalAPIDuration": 0,
+      "totalAPIDurationWithoutRetries": 0,
+      "totalToolDuration": 0,
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0,
+      "totalDuration": 168,
+      "startTime": 1791327976785,
+      "modelUsage": {},
+      "hasUnknownModelCost": false
+    }
+  ],
+  "ownerConfigurationUnchanged": true
+}
