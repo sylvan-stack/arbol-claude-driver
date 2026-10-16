@@ -69,7 +69,8 @@ def unit(folder: Path) -> int:
 
 
 def contract(folder: Path) -> int:
-    repo = Path(os.environ.get("ARBOL_CONFORMANCE_REPO", str(Path.home() / "repos/sylvan-stack/arbol"))).resolve()
+    # By default the clone of the last merged main, never the repository's own folder, which can hold unmerged work (BLD-D18).
+    repo = Path(os.environ.get("ARBOL_CONFORMANCE_REPO", str(Path.home() / "repos/sylvan-stack/readonly/arbol"))).resolve()
     if read_object(repo / "package.json").get("name") != "@sylvan-stack/arbol":
         raise ValueError("ARBOL_CONFORMANCE_REPO must name the Arbol repository.")
     # The shared suite is standard-library Python; the Build's own interpreter runs it, with nothing to install.
