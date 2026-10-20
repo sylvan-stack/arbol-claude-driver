@@ -17,7 +17,7 @@ from .processes import ACTUAL_HOME, close_pipes, end_run_groups, inspect_tool, k
 from .protocol import RunEvents, RunProtocol, exit_failure
 from .request import read_request, run_arguments, user_record
 from .state import private_directory, process_owner
-from .subscriptions import Secrets, Subscriptions, keychain_service, validate_key
+from .subscriptions import Subscriptions
 
 
 async def run(command: Command, subscriptions: Subscriptions, events: RunEvents, env: Env, build: str, cancel: asyncio.Event, input_reader: asyncio.StreamReader) -> int:
@@ -28,15 +28,6 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
     tool = await inspect_tool(subscriptions.state.directory, subscriptions.settings.get('toolPath'), env, cancel)
     program = require_tool(tool)
     key = None
-    if initial['family'] == 'zai':
-        source = Secrets(keychain_service(subscriptions.state.directory), ACTUAL_HOME, env, cancel)
-        key = await source.read(initial['id'], subscriptions.defaults(initial['id']).get('secret'))
-        if not key:
-            failure = Failure('credential_rejected', 'The Subscription has no key.', {'remedy': 'Replace the key.'})
-            await subscriptions.run_report(initial, dict(failure.result))
-            raise failure
-        validate_key(key)
-        events.secrets.append(key)
     runs, chats = Runs(subscriptions.state), Chats(subscriptions.state)
     home = subscriptions.state.subscription(initial['id']) / 'home'
     plan, record = await chats.reserve(request, runs, home)

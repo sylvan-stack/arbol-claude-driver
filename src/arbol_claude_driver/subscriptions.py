@@ -13,73 +13,30 @@ import urllib.parse
 import urllib.request
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any
 
-from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads
+from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
 from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
 from .state import State, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
 
-TUNING_VARIABLES = ['API_TIMEOUT_MS', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC']
-MODEL_NAMES = ['haiku', 'sonnet', 'opus']
 FAMILIES: list[Record] = [
     {'id': 'anthropic', 'label': 'Anthropic', 'auth': 'vendor_login', 'settings': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
-    {'id': 'zai', 'label': 'Z.AI', 'auth': 'key', 'settings': {'type': 'object', 'additionalProperties': False, 'properties': {
-        'baseUrl': {'type': 'string', 'format': 'uri', 'pattern': '^https?://', 'default': 'https://api.z.ai/api/anthropic'},
-        'modelMap': {'type': 'object', 'additionalProperties': False, 'default': {}, 'properties': {name: {'type': 'string', 'minLength': 1} for name in MODEL_NAMES}},
-        'toolEnvironment': {'type': 'object', 'additionalProperties': False, 'default': {}, 'properties': {name: {'type': 'string'} for name in TUNING_VARIABLES}},
-    }}},
 ]
 
 
 def family_id(value: Any) -> str:
-    if value not in ('anthropic', 'zai'):
-        raise Failure('invalid_input', 'Choose the Subscription family anthropic or zai.')
-    return str(value)
+    if value != 'anthropic':
+        raise retired_route()
+    return 'anthropic'
 
 
 def family_settings(family: str, value: Record, prefix: str, notices: list[Record]) -> Record:
-    def fail(field: str) -> NoReturn:
-        raise Failure('invalid_input', f'Invalid setting {prefix}{field}.')
-
-    def unknown(field: str) -> NoReturn:
-        raise Failure('invalid_input', f'Unknown setting {prefix}{field}.')
-
-    if family == 'anthropic':
-        for key in value:
-            unknown(key)
-        return {}
+    family_id(family)
     for key in value:
-        if key not in {'baseUrl', 'modelMap', 'toolEnvironment'}:
-            unknown(key)
-    settings: Record = {}
-    if 'baseUrl' in value:
-        if not isinstance(value['baseUrl'], str):
-            fail('baseUrl')
-        try:
-            url = urllib.parse.urlparse(value['baseUrl'])
-            # urllib validates bracketed hosts while parsing, and ports on access.
-            _ = url.port
-            if url.scheme not in {'http', 'https'} or not url.hostname or url.username or url.password:
-                fail('baseUrl')
-        except ValueError:
-            fail('baseUrl')
-        settings['baseUrl'] = value['baseUrl']
-    for key, allowed in [('modelMap', MODEL_NAMES), ('toolEnvironment', TUNING_VARIABLES)]:
-        if key not in value:
-            continue
-        if not isinstance(value[key], dict):
-            fail(key)
-        clean: Record = {}
-        for name, item in value[key].items():
-            if name not in allowed:
-                if key == 'toolEnvironment':
-                    fail(f'{key}.{name}')
-                unknown(f'{key}.{name}')
-            if not isinstance(item, str) or (key == 'modelMap' and not item):
-                fail(f'{key}.{name}')
-            clean[name] = item
-        settings[key] = clean
-    return settings
+        if key in {'baseUrl', 'modelMap', 'toolEnvironment'}:
+            raise retired_route()
+        raise Failure('invalid_input', f'Unknown setting {prefix}{key}.')
+    return {}
 
 
 class Subscriptions:
@@ -91,9 +48,13 @@ class Subscriptions:
         return dict(self.settings.get('subscriptions', {}).get(identifier, {}))
 
     async def record(self, identifier: str) -> Record:
+        if identifier in {'zai', 'claude-zai'}:
+            raise retired_route()
         value = read_json(self.state.subscription(identifier) / 'record.json')
+        if isinstance(value, dict) and value.get('family') == 'zai':
+            raise retired_route()
         if value is None:
-            if identifier not in {'anthropic', 'zai'}:
+            if identifier != 'anthropic':
                 raise Failure('not_found', 'Subscription was not found.')
             info = (self.state.directory / 'format').stat()
             timestamp = now(getattr(info, 'st_birthtime', info.st_mtime))
@@ -101,7 +62,7 @@ class Subscriptions:
         allowed = {'id', 'family', 'label', 'auth', 'state', 'account', 'problem', 'lastUsage', 'createdAt', 'updatedAt', 'checkedAt'}
         bad = not isinstance(value, dict)
         if not bad:
-            bad = value.get('id') != identifier or value.get('family') not in {'anthropic', 'zai'} or not isinstance(value.get('label'), str) or not value['label'] or value.get('state') not in {'signed_out', 'signed_in', 'needs_attention'} or value.get('auth') != ('vendor_login' if value.get('family') == 'anthropic' else 'key') or not all(valid_date(value.get(field)) for field in ['createdAt', 'updatedAt']) or bool(set(value) - allowed) or ((value['state'] == 'needs_attention') != ('problem' in value)) or ('checkedAt' in value and not valid_date(value['checkedAt']))
+            bad = value.get('id') != identifier or value.get('family') != 'anthropic' or not isinstance(value.get('label'), str) or not value['label'] or value.get('state') not in {'signed_out', 'signed_in', 'needs_attention'} or value.get('auth') != ('vendor_login' if value.get('family') == 'anthropic' else 'key') or not all(valid_date(value.get(field)) for field in ['createdAt', 'updatedAt']) or bool(set(value) - allowed) or ((value['state'] == 'needs_attention') != ('problem' in value)) or ('checkedAt' in value and not valid_date(value['checkedAt']))
             account = value.get('account')
             bad |= account is not None and (not isinstance(account, dict) or any(key not in {'name', 'email', 'organization', 'plan'} or not isinstance(item, str) for key, item in account.items()))
         if bad:
@@ -123,15 +84,19 @@ class Subscriptions:
         return result
 
     async def list(self) -> list[Record]:
-        ids = ['anthropic', 'zai']
+        ids = ['anthropic']
         directory = self.state.directory / 'subscriptions'
         if directory.exists():
             for entry in directory.iterdir():
-                if entry.is_dir() and read_json(self.state.subscription(entry.name) / 'record.json') is not None and entry.name not in ids:
+                if (entry.is_dir() and isinstance(record := read_json(self.state.subscription(entry.name) / 'record.json'), dict)
+                        and record.get('family') != 'zai' and entry.name not in ids):
                     ids.append(entry.name)
         return [await self.get(identifier) for identifier in ids]
 
     async def create(self, family: str, label: str, explicit: str | None = None) -> Record:
+        family_id(family)
+        if explicit in {'zai', 'claude-zai'}:
+            raise retired_route()
         if not label:
             raise Failure('invalid_input', 'Give the new Subscription a label.')
         count = 2
@@ -140,7 +105,7 @@ class Subscriptions:
             family_settings(family, self.defaults(identifier).get('settings', {}), f'{self.settings_file}: subscriptions.{identifier}.settings.', [])
             async with self.state.lock(identifier):
                 folder = self.state.subscription(identifier)
-                if identifier not in {'anthropic', 'zai'} and read_json(folder / 'record.json') is None and read_json(folder / 'sign-in.json') is None:
+                if identifier != 'anthropic' and read_json(folder / 'record.json') is None and read_json(folder / 'sign-in.json') is None:
                     timestamp = now()
                     private_directory(folder / 'home')
                     owner_skills(folder / 'home', str(self.settings_file.parent.parent))
@@ -171,20 +136,12 @@ class Subscriptions:
         return subscription
 
     async def environment(self, identifier: str, inherited: Env, key: str | None = None) -> Env:
-        subscription = await self.get(identifier)
+        await self.get(identifier)
         home = self.state.subscription(identifier) / 'home'
         private_directory(home)
         async with self.state.lock(identifier):
             owner_skills(home, inherited.get('HOME', ACTUAL_HOME))
         env = clean_environment(inherited, ACTUAL_HOME, str(home))
-        if subscription['family'] == 'zai':
-            if not key:
-                raise Failure('not_signed_in', 'The Subscription has no key.', {'remedy': 'Sign in.'})
-            settings = subscription['settings']
-            env.update(ANTHROPIC_BASE_URL=settings.get('baseUrl', 'https://api.z.ai/api/anthropic'), ANTHROPIC_AUTH_TOKEN=key)
-            for name, model in settings.get('modelMap', {}).items():
-                env[f'ANTHROPIC_DEFAULT_{name.upper()}_MODEL'] = model
-            env.update(settings.get('toolEnvironment', {}))
         return env
 
     async def run_report(self, initial: Record, failure: Record | None = None, usage: Record | None = None) -> None:
@@ -370,6 +327,7 @@ class Authentication:
         return dict(value)
 
     async def clean_progress(self, identifier: str) -> None:
+        await self.subscriptions.record(identifier)
         progress = self.progress(identifier)
         if not progress or await owner_alive(progress['owner']):
             return
@@ -385,8 +343,10 @@ class Authentication:
         directory = self.subscriptions.state.directory / 'subscriptions'
         if directory.exists():
             for path in directory.iterdir():
-                if path.is_dir():
-                    await self.clean_progress(path.name)
+                if path.is_dir() and (path / 'sign-in.json').is_file():
+                    record = read_json(path / 'record.json')
+                    if path.name not in {'zai', 'claude-zai'} and not (isinstance(record, dict) and record.get('family') == 'zai'):
+                        await self.clean_progress(path.name)
 
     async def reserve(self, identifier: str, operation: str) -> Record:
         await self.clean_progress(identifier)
@@ -450,6 +410,7 @@ class Authentication:
         return require_tool(await inspect_tool(self.subscriptions.state.directory, self.subscriptions.settings.get('toolPath'), self.env, self.cancel))
 
     async def key(self, identifier: str) -> str:
+        await self.subscriptions.get(identifier)
         key = await self.secrets.read(identifier, self.subscriptions.defaults(identifier).get('secret'))
         if key is None:
             raise Failure('credential_rejected', 'The Subscription has no key.', {'remedy': 'Replace the key.'})
@@ -478,14 +439,10 @@ class Authentication:
             raise Failure('not_signed_in', 'Sign in to this Subscription first.', {'remedy': 'Sign in.'})
         try:
             account = None
-            if initial['family'] == 'anthropic':
-                status = await self.status(identifier)
-                if not status['accepted']:
-                    raise Failure('credential_rejected', 'claude reports that the account is not logged in.', {'remedy': 'Sign in.'})
-                account = status.get('account')
-            else:
-                key = await self.key(identifier)
-                normalize_quota(await gateway(initial['settings'].get('baseUrl', 'https://api.z.ai/api/anthropic'), '/api/monitor/usage/quota/limit', key, 20, self.cancel), key=key)
+            status = await self.status(identifier)
+            if not status['accepted']:
+                raise Failure('credential_rejected', 'claude reports that the account is not logged in.', {'remedy': 'Sign in.'})
+            account = status.get('account')
             await self.save(identifier, lambda record: {**{k: v for k, v in record.items() if k not in {'problem', 'account'}}, 'state': 'signed_in', **({'account': account} if account else {}), 'checkedAt': now()}, initial['updatedAt'])
         except Failure as error:
             if error.result['code'] != 'credential_rejected':
@@ -497,47 +454,11 @@ class Authentication:
         initial = await self.subscriptions.get(identifier)
         if initial['state'] != 'signed_in':
             return {'outcome': 'needs_sign_in', 'message': 'Sign in to this Subscription first.', 'fetchedAt': now(), 'windows': []}
-        if initial['family'] == 'anthropic':
-            return dict(initial.get('lastUsage', {'outcome': 'unsupported', 'message': 'Usage is available after a run reports it.', 'fetchedAt': now(), 'windows': []}))
-        try:
-            key = await self.key(identifier)
-            report = normalize_quota(await gateway(initial['settings'].get('baseUrl', 'https://api.z.ai/api/anthropic'), '/api/monitor/usage/quota/limit', key, 20, self.cancel), key=key)
-            await self.save(identifier, lambda record: {**record, 'lastUsage': report}, initial['updatedAt'])
-            return report
-        except Failure as error:
-            if error.result['code'] == 'credential_rejected':
-                await self.rejection(initial, error)
-                outcome = 'needs_sign_in'
-            elif error.result['code'] in {'vendor_unavailable', 'tool_failed', 'invalid_input'}:
-                outcome = 'unavailable'
-            else:
-                raise
-            return {'outcome': outcome, 'message': str(error), 'fetchedAt': now(), 'windows': []}
+        return dict(initial.get('lastUsage', {'outcome': 'unsupported', 'message': 'Usage is available after a run reports it.', 'fetchedAt': now(), 'windows': []}))
 
     async def models(self, identifier: str) -> Record:
-        initial = await self.subscriptions.require_signed_in(identifier)
+        await self.subscriptions.require_signed_in(identifier)
         fetched = now()
-        if initial['family'] == 'zai':
-            fallback = {'source': 'builtin', 'fetchedAt': fetched, 'models': [{'id': name, 'label': name} for name in dict.fromkeys(initial['settings'].get('modelMap', {}).values())]}
-            try:
-                key = await self.key(identifier)
-                value = await gateway(initial['settings'].get('baseUrl', 'https://api.z.ai/api/anthropic'), '/api/paas/v4/models', key, 30, self.cancel)
-                if not isinstance(value, dict) or not isinstance(value.get('data'), list):
-                    raise Failure('vendor_unavailable', 'Z.AI returned an unreadable model catalog.')
-                models = []
-                for item in value['data']:
-                    if not isinstance(item, dict):
-                        continue
-                    model = next((item[field] for field in ['id', 'model', 'name'] if isinstance(item.get(field), str) and item[field]), None)
-                    if model:
-                        models.append({'id': safe_text(model, [key]), 'label': safe_text(str(item.get('label') if isinstance(item.get('label'), str) else model), [key])})
-                return {'source': 'vendor', 'fetchedAt': fetched, 'models': models} if models else fallback
-            except Failure as error:
-                if error.result['code'] == 'credential_rejected':
-                    await self.rejection(initial, error)
-                if error.result['code'] not in {'vendor_unavailable', 'credential_rejected', 'tool_failed', 'invalid_input'}:
-                    raise
-                return fallback
         child = None
         try:
             env = await self.subscriptions.environment(identifier, self.env)
@@ -595,106 +516,72 @@ class Authentication:
         try:
             await self.save(identifier, self.unsigned, owner=progress['owner'])
             async with asyncio.timeout(max(.001, epoch(progress['expiresAt']) - time.time())):
-                if initial['family'] == 'zai':
-                    source = self.subscriptions.defaults(identifier).get('secret')
-                    key = await self.secrets.read(identifier, source)
-                    if key is None:
-                        await emit({'step': 'store_secret', 'prompt': 'Store the Z.AI key in the named Keychain item.', 'keychain': {'service': self.secrets.service, 'account': identifier}, 'expiresAt': progress['expiresAt']})
-                    while key is None:
-                        if self.cancel.is_set():
-                            raise Failure('tool_failed', 'Sign-in was cancelled.')
-                        await asyncio.sleep(fixed_wait(250))
-                        key = await self.secrets.read(identifier, source)
-                    try:
-                        validate_key(key)
-                    except Failure as failure:
-                        if not source or source['from'] != 'command':
-                            await self.secrets.remove(identifier)
-                        else:
-                            raise Failure('invalid_input', str(failure) + ' The Driver cannot remove a key from its source command.') from None
-                        raise
-                    checked = None
-                    try:
-                        normalize_quota(await gateway(initial['settings'].get('baseUrl', 'https://api.z.ai/api/anthropic'), '/api/monitor/usage/quota/limit', key, 20, self.cancel), key=key)
-                        checked = now()
-                    except Failure as failure:
-                        if failure.result['code'] == 'credential_rejected':
-                            command_source = source and source['from'] == 'command'
-                            if not command_source:
-                                await self.secrets.remove(identifier)
-                            raise Failure('credential_rejected', 'Z.AI rejected the key from the source command; the Driver cannot remove that key.' if command_source else 'Z.AI rejected the key; it was removed from the Keychain.', {'remedy': 'Replace the key.'}) from None
-                        if failure.result['code'] != 'vendor_unavailable':
-                            raise
+                folder = self.temporary(identifier)
+                private_directory(folder)
+                address = folder / 'address'
+                browser = folder / 'browser'
+                python_launcher(browser, f'import os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
+                env = await self.subscriptions.environment(identifier, self.env)
+                child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, env['CLAUDE_CONFIG_DIR'])
+                assert child.stdout and child.stderr and child.stdin
+                tool = await process_owner(child.pid)
+                async with self.subscriptions.state.lock(identifier):
+                    current = self.progress(identifier)
+                    if current and current['owner'] == progress['owner']:
+                        write_json(self.path(identifier), {**current, **({'tool': tool} if tool else {})})
+                async def collect() -> None:
+                    nonlocal output
+                    assert child and child.stdout
+                    while chunk := await child.stdout.read(65536):
+                        output += chunk.decode('utf-8', 'replace')
+                        if len(output.encode()) > 2 * 1024 * 1024:
+                            raise Failure('tool_failed', 'The child command returned too much output.')
+                reader = asyncio.create_task(collect())
+                drainer = asyncio.create_task(child.stderr.read())
+                url = None
+                while not url and child.returncode is None:
                     if self.cancel.is_set():
                         raise Failure('tool_failed', 'Sign-in was cancelled.')
-                    await self.save(identifier, lambda record: {**record, 'state': 'signed_in', **({'checkedAt': checked} if checked else {})}, owner=progress['owner'])
-                else:
-                    folder = self.temporary(identifier)
-                    private_directory(folder)
-                    address = folder / 'address'
-                    browser = folder / 'browser'
-                    python_launcher(browser, f'import os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
-                    env = await self.subscriptions.environment(identifier, self.env)
-                    child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, env['CLAUDE_CONFIG_DIR'])
-                    assert child.stdout and child.stderr and child.stdin
-                    tool = await process_owner(child.pid)
-                    async with self.subscriptions.state.lock(identifier):
-                        current = self.progress(identifier)
-                        if current and current['owner'] == progress['owner']:
-                            write_json(self.path(identifier), {**current, **({'tool': tool} if tool else {})})
-                    async def collect() -> None:
-                        nonlocal output
-                        assert child and child.stdout
-                        while chunk := await child.stdout.read(65536):
-                            output += chunk.decode('utf-8', 'replace')
-                            if len(output.encode()) > 2 * 1024 * 1024:
-                                raise Failure('tool_failed', 'The child command returned too much output.')
-                    reader = asyncio.create_task(collect())
-                    drainer = asyncio.create_task(child.stderr.read())
-                    url = None
-                    while not url and child.returncode is None:
-                        if self.cancel.is_set():
-                            raise Failure('tool_failed', 'Sign-in was cancelled.')
-                        if by_code:
-                            url = next((value for value in re.findall(r'https://[^\s]+', output) if 'platform.claude.com%2Foauth%2Fcode%2Fcallback' in value or 'platform.claude.com/oauth/code/callback' in value), None)
-                        elif address.exists():
-                            url = address.read_text()
-                        if not url:
-                            await asyncio.sleep(fixed_wait(50))
-                    if url:
-                        allowed = ['claude.com', 'claude.ai', 'platform.claude.com', 'localhost']
-                        if urllib.parse.urlparse(url).hostname not in allowed:
-                            raise Failure('tool_failed', 'claude returned a sign-in address on an unexpected host.')
-                        await emit({'step': 'open_url', 'url': url, 'allowedHosts': allowed, 'expiresAt': progress['expiresAt']})
-                        if by_code:
-                            await emit({'step': 'enter_code', 'prompt': 'Enter the one-time code shown by Claude.', 'expiresAt': progress['expiresAt']})
-                            input_task = asyncio.create_task(input_reader.readline())
-                            stop_task = asyncio.create_task(self.cancel.wait())
-                            await asyncio.wait([input_task, stop_task], return_when=asyncio.FIRST_COMPLETED)
-                            stop_task.cancel()
-                            if self.cancel.is_set():
-                                input_task.cancel()
-                                raise Failure('tool_failed', 'Sign-in was cancelled.')
-                            try:
-                                value = loads(await input_task)
-                            except ValueError:
-                                raise Failure('invalid_input', 'Enter the code as one JSON line.') from None
-                            if not isinstance(value, dict) or not isinstance(value.get('input'), str) or not value['input'] or re.search('[\r\n]', value['input']):
-                                raise Failure('invalid_input', 'Enter one nonempty code.')
-                            child.stdin.write((value['input'] + '\n').encode())
-                            await child.stdin.drain()
-                    while child.returncode is None:
-                        if self.cancel.is_set():
-                            raise Failure('tool_failed', 'Sign-in was cancelled.')
+                    if by_code:
+                        url = next((value for value in re.findall(r'https://[^\s]+', output) if 'platform.claude.com%2Foauth%2Fcode%2Fcallback' in value or 'platform.claude.com/oauth/code/callback' in value), None)
+                    elif address.exists():
+                        url = address.read_text()
+                    if not url:
                         await asyncio.sleep(fixed_wait(50))
-                    await reader
-                    await drainer
-                    if child.returncode != 0:
-                        raise Failure('credential_rejected', 'Claude sign-in failed. Try signing in again.', {'remedy': 'Sign in.'})
-                    status = await self.status(identifier)
-                    if not status['accepted']:
-                        raise Failure('credential_rejected', 'claude did not confirm the login.', {'remedy': 'Sign in.'})
-                    await self.save(identifier, lambda record: {**record, 'state': 'signed_in', **({'account': status['account']} if status.get('account') else {}), 'checkedAt': now()}, owner=progress['owner'])
+                if url:
+                    allowed = ['claude.com', 'claude.ai', 'platform.claude.com', 'localhost']
+                    if urllib.parse.urlparse(url).hostname not in allowed:
+                        raise Failure('tool_failed', 'claude returned a sign-in address on an unexpected host.')
+                    await emit({'step': 'open_url', 'url': url, 'allowedHosts': allowed, 'expiresAt': progress['expiresAt']})
+                    if by_code:
+                        await emit({'step': 'enter_code', 'prompt': 'Enter the one-time code shown by Claude.', 'expiresAt': progress['expiresAt']})
+                        input_task = asyncio.create_task(input_reader.readline())
+                        stop_task = asyncio.create_task(self.cancel.wait())
+                        await asyncio.wait([input_task, stop_task], return_when=asyncio.FIRST_COMPLETED)
+                        stop_task.cancel()
+                        if self.cancel.is_set():
+                            input_task.cancel()
+                            raise Failure('tool_failed', 'Sign-in was cancelled.')
+                        try:
+                            value = loads(await input_task)
+                        except ValueError:
+                            raise Failure('invalid_input', 'Enter the code as one JSON line.') from None
+                        if not isinstance(value, dict) or not isinstance(value.get('input'), str) or not value['input'] or re.search('[\r\n]', value['input']):
+                            raise Failure('invalid_input', 'Enter one nonempty code.')
+                        child.stdin.write((value['input'] + '\n').encode())
+                        await child.stdin.drain()
+                while child.returncode is None:
+                    if self.cancel.is_set():
+                        raise Failure('tool_failed', 'Sign-in was cancelled.')
+                    await asyncio.sleep(fixed_wait(50))
+                await reader
+                await drainer
+                if child.returncode != 0:
+                    raise Failure('credential_rejected', 'Claude sign-in failed. Try signing in again.', {'remedy': 'Sign in.'})
+                status = await self.status(identifier)
+                if not status['accepted']:
+                    raise Failure('credential_rejected', 'claude did not confirm the login.', {'remedy': 'Sign in.'})
+                await self.save(identifier, lambda record: {**record, 'state': 'signed_in', **({'account': status['account']} if status.get('account') else {}), 'checkedAt': now()}, owner=progress['owner'])
             succeeded = True
             await self.release(identifier, progress['owner'])
             await emit({'step': 'done', 'subscription': await self.subscriptions.get(identifier)})
@@ -715,8 +602,6 @@ class Authentication:
                     current = self.progress(identifier)
                     if current and current['owner'] == progress['owner']:
                         write_json(self.subscriptions.state.subscription(identifier) / 'record.json', {**self.unsigned(await self.subscriptions.record(identifier)), 'updatedAt': now()})
-                if initial['family'] == 'zai' and (timed_out or self.cancel.is_set()) and self.subscriptions.defaults(identifier).get('secret', {}).get('from') != 'command':
-                    await Secrets(self.secrets.service, self.secrets.home, self.env).remove(identifier)
                 if initial['family'] == 'anthropic':
                     env = await self.subscriptions.environment(identifier, self.env)
                     cleanup = await inspect_tool(self.subscriptions.state.directory, self.subscriptions.settings.get('toolPath'), self.env, asyncio.Event())
@@ -744,8 +629,6 @@ class Authentication:
                 result = await child_command(await self.tool(), ['auth', 'logout'], env, env['CLAUDE_CONFIG_DIR'], cancel=self.cancel)
                 if result['code'] != 0:
                     raise Failure('tool_failed', 'claude could not sign the account out.')
-            elif initial['family'] == 'zai' and self.subscriptions.defaults(identifier).get('secret', {}).get('from') != 'command':
-                await self.secrets.remove(identifier)
             if remove:
                 folder = self.subscriptions.state.subscription(identifier)
                 shutil.rmtree(folder / 'home', ignore_errors=True)
@@ -756,38 +639,4 @@ class Authentication:
         return None if remove else await self.subscriptions.get(identifier)
 
     async def import_settings(self, identifier: str, file: Path) -> Record:
-        initial = await self.subscriptions.get(identifier)
-        if initial['family'] != 'zai':
-            raise Failure('invalid_input', 'Import a gateway setup into a Z.AI Subscription.')
-        if self.subscriptions.defaults(identifier).get('secret', {}).get('from') == 'command':
-            raise Failure('invalid_input', 'This Subscription reads its key from a command. Choose a Keychain source before importing.')
-        try:
-            value = loads(file.read_text())
-        except (OSError, ValueError):
-            raise Failure('invalid_input', 'The import file could not be read as JSON.') from None
-        if not isinstance(value, dict) or not isinstance(value.get('env'), dict):
-            raise Failure('invalid_input', 'The import file must contain an env object.')
-        env = value['env']
-        key = env.get('ANTHROPIC_AUTH_TOKEN')
-        if not isinstance(key, str):
-            raise Failure('invalid_input', 'The import file has no Z.AI key.')
-        validate_key(key)
-        settings = family_settings('zai', {**({'baseUrl': env['ANTHROPIC_BASE_URL']} if 'ANTHROPIC_BASE_URL' in env else {}), 'modelMap': {name: env[f'ANTHROPIC_DEFAULT_{name.upper()}_MODEL'] for name in MODEL_NAMES if f'ANTHROPIC_DEFAULT_{name.upper()}_MODEL' in env}, 'toolEnvironment': {name: env[name] for name in TUNING_VARIABLES if name in env}}, 'import.', [])
-        progress = await self.reserve(identifier, 'sign_out')
-        try:
-            try:
-                raw = loads(self.subscriptions.settings_file.read_text())
-            except FileNotFoundError:
-                raw = {}
-            except (OSError, ValueError):
-                raise Failure('invalid_input', 'The Driver settings could not be read for import.') from None
-            if not isinstance(raw, dict):
-                raise Failure('invalid_input', 'The Driver settings must be an object.')
-            records: Record = dict(raw['subscriptions']) if isinstance(raw.get('subscriptions'), dict) else {}
-            old: Record = dict(records[identifier]) if isinstance(records.get(identifier), dict) else {}
-            await self.secrets.store(identifier, key)
-            write_json(self.subscriptions.settings_file, {**raw, 'subscriptions': {**records, identifier: {**old, 'settings': {**initial['settings'], **settings}}}})
-            await self.save(identifier, self.unsigned, owner=progress['owner'])
-        finally:
-            await self.release(identifier, progress['owner'])
-        return {**await self.subscriptions.get(identifier), 'settings': {**initial['settings'], **settings}}
+        raise retired_route()

@@ -24,6 +24,6 @@
       "command": "\"$ARBOL_BUILD_DIR/runtime/python/bin/python3.14\" -I \"$ARBOL_BUILD_DIR/scripts/check_build.py\" live"
     }
   ],
-  "contract": 1,
+  "contract": 2,
   "dataFormat": 1
 }

@@ -1,6 +1,8 @@
 # Arbol Claude Driver
 
-The Arbol 2 Driver for Claude implements Subscription management, inference, native conversation continuity, tools and questions, background work, cancellation, error and quota reports, and development checks. The public interface is one command-line process per operation. Package version `1.0.0`, contract `1` and data format `1` are preserved by the SYL-95 Python migration.
+The Arbol 2 Driver for Claude implements Anthropic Subscription management, inference, native conversation continuity, tools and questions, background work, cancellation, error and quota reports, and development checks. The public interface is one command-line process per operation. Package version `1.0.0`, contract `2`, data format `1`.
+
+Contract 2 retires Claude z.ai routes. Explicit z.ai selectors, retired records and gateway settings fail before credential resolution or inference, with a remedy to migrate to the Pi Driver. Retired local records, histories and credentials remain available for explicit owner cleanup. Anthropic authentication and execution retain their existing behavior.
 
 ## Development
 

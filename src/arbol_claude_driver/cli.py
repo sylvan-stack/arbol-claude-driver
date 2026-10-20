@@ -73,7 +73,7 @@ async def main(args: list[str]) -> int:
         if cancel.is_set():
             return 2
         if command.name == 'info':
-            await output.json({'driver': 'claude', **identity, 'contract': 1, 'stateDirectory': str(state.directory), 'settingsFile': str(file), 'tool': await inspect_tool(state.directory, settings.get('toolPath'), dict(os.environ), cancel), **({'notices': notices} if notices else {})})
+            await output.json({'driver': 'claude', **identity, 'contract': 2, 'stateDirectory': str(state.directory), 'settingsFile': str(file), 'tool': await inspect_tool(state.directory, settings.get('toolPath'), dict(os.environ), cancel), **({'notices': notices} if notices else {})})
             return 0
         if command.name == 'dev probe':
             await output.json(await probe(subscriptions, dict(os.environ), cancel))

@@ -133,6 +133,11 @@ def safe_failure(error: BaseException | None) -> Record:
     return dict(error.result if isinstance(error, Failure) else Failure('internal', 'The Driver could not complete this operation.').result)
 
 
+def retired_route() -> Failure:
+    return Failure('invalid_input', 'Claude contract 2 supports Anthropic subscriptions only.',
+                   {'remedy': 'Migrate the retired gateway route and its model selection to the Pi Driver.'})
+
+
 def number(value: Any) -> TypeGuard[int | float]:
     if type(value) not in (int, float):
         return False
@@ -296,17 +301,25 @@ def read_settings(file: Path) -> tuple[Record, list[Record]]:
         return result
 
     root = obj(root, '(root)')
+    if (root.get('defaultSubscription') in ('zai', 'claude-zai')
+            or isinstance(root.get('toolPath'), str) and Path(root['toolPath']).name == 'claude-zai'
+            or any(key in root for key in ('baseUrl', 'modelMap', 'toolEnvironment'))):
+        raise retired_route()
     unknown(root, ['toolPath', 'defaultSubscription', 'subscriptions'], '')
     settings = strings(root, ['toolPath', 'defaultSubscription'], '')
     if 'subscriptions' in root:
         settings['subscriptions'] = {}
         for identifier, value in obj(root['subscriptions'], 'subscriptions').items():
+            if identifier in {'zai', 'claude-zai'}:
+                raise retired_route()
             prefix = f'subscriptions.{identifier}.'
             item = obj(value, prefix[:-1])
             unknown(item, ['defaultModel', 'defaultEffort', 'settings', 'secret'], prefix)
             clean = strings(item, ['defaultModel', 'defaultEffort'], prefix)
             if 'settings' in item:
                 clean['settings'] = obj(item['settings'], prefix + 'settings')
+                if any(key in clean['settings'] for key in ('baseUrl', 'modelMap', 'toolEnvironment')):
+                    raise retired_route()
             if 'secret' in item:
                 secret = obj(item['secret'], prefix + 'secret')
                 if secret.get('from') == 'keychain':
