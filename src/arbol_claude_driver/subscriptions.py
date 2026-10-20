@@ -343,7 +343,7 @@ class Authentication:
         directory = self.subscriptions.state.directory / 'subscriptions'
         if directory.exists():
             for path in directory.iterdir():
-                if path.is_dir():
+                if path.is_dir() and (path / 'sign-in.json').is_file():
                     record = read_json(path / 'record.json')
                     if path.name not in {'zai', 'claude-zai'} and not (isinstance(record, dict) and record.get('family') == 'zai'):
                         await self.clean_progress(path.name)

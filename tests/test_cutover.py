@@ -75,3 +75,11 @@ class RetiredRoutes(unittest.TestCase):
             with self.subTest(settings=settings):
                 self.settings.write_text(json.dumps({**self.configuration, **settings}))
                 self.refuses('run', 'hello')
+
+    def test_incomplete_concurrent_creation_is_not_a_sign_in_to_recover(self) -> None:
+        (self.state / 'subscriptions/anthropic-2/home').mkdir(parents=True)
+        result = self.call('subscriptions', 'create', '--family', 'anthropic', '--label', 'New')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)['family'], 'anthropic')
+        self.assertEqual((self.retired / 'history.json').read_text(), 'historical conversation')
+        self.assertFalse(self.sentinel.exists())
