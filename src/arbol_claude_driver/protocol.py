@@ -218,7 +218,7 @@ def run_failure(result: Record | None, assistant: Record | None, family: str, ve
         if reset:
             wait = max(0, epoch(reset) - time.time())
     detail = {'basis': basis, 'toolVersion': version, **({'vendorCode': vendor_code} if vendor_code else {}), **({'vendorStatus': status} if status is not None else {})}
-    remedy = 'Replace the key.' if code == 'credential_rejected' and family == 'zai' else 'Sign in again.' if code == 'credential_rejected' else 'Choose a model from the catalog.' if code == 'invalid_input' else 'Start a new chat.' if code == 'context_exceeded' else None
+    remedy = 'Sign in again.' if code == 'credential_rejected' else 'Choose a model from the catalog.' if code == 'invalid_input' else 'Start a new chat.' if code == 'context_exceeded' else None
     return Failure(code, message, {'detail': detail, **({'retryAfterSeconds': wait} if wait is not None else {}), **({'remedy': remedy} if remedy else {})}, secrets)
 
 
