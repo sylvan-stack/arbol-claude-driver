@@ -80,3 +80,4 @@ Historical Build `1` passed 81 TypeScript tests, 38 shared scenarios and one Hai
 | `arbol` | 2.0.0 | `~/Artifacts/arbol` |
 | `arbol-claude-driver` | 1.0.0 | `~/Artifacts/arbol-claude-driver` |
 | `arbol-codex-driver` | 1.0.0 | `~/Artifacts/arbol-codex-driver` |
+| `arbol-pi-driver` | 1.0.0 | `~/Artifacts/arbol-pi-driver` |
