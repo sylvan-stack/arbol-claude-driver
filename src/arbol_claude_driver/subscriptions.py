@@ -264,6 +264,10 @@ async def gateway(base: str, path: str, key: str, timeout: float, cancel: asynci
         await asyncio.gather(stopped, return_exceptions=True)
 
 
+# What each z.ai quota entry counts (DRV-1.27): tokens, credits, or the monthly MCP calls of a TIME_LIMIT entry.
+QUOTA_RESOURCES = {'TOKENS_LIMIT': 'tokens', 'CREDIT_LIMIT': 'credits', 'TIME_LIMIT': 'calls'}
+
+
 def normalize_quota(value: Any, timestamp: float | None = None, key: str = '') -> Record:
     current = time.time() if timestamp is None else timestamp
     if not isinstance(value, dict) or value.get('success') is not True or not isinstance(value.get('data'), dict) or not isinstance(value['data'].get('limits'), list):
@@ -292,7 +296,7 @@ def normalize_quota(value: Any, timestamp: float | None = None, key: str = '') -
         valid_reset = number(reset) and not (length == 300 and item['type'] != 'TIME_LIMIT' and reset / 1000 - current > 301 * 60)
         unit = {1: 'day', 3: 'hour', 5: 'minute', 6: 'week'}.get(item.get('unit', -1))
         label = 'MCP' if item['type'] == 'TIME_LIMIT' else '5-hour window' if length == 300 else 'Weekly window' if length == 10080 else f'{item.get("number")} {unit}{"" if item.get("number") == 1 else "s"} window' if length is not None else 'Usage window'
-        window: Record = {'kind': 'other' if item['type'] == 'TIME_LIMIT' else 'session' if index == 0 else 'weekly', 'label': label, 'usedPercent': int(min(100, max(0, percentage)) * 10 + .5) / 10}
+        window: Record = {'kind': 'other' if item['type'] == 'TIME_LIMIT' else 'session' if index == 0 else 'weekly', 'label': label, 'resource': QUOTA_RESOURCES[item['type']], 'usedPercent': int(min(100, max(0, percentage)) * 10 + .5) / 10}
         if length is not None:
             window['windowMinutes'] = length
         if valid_reset and reset is not None:
