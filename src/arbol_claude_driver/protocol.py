@@ -160,6 +160,8 @@ def retry_wait(text: str) -> float | None:
 
 
 def limit_report(record: Record) -> Record | None:
+    # Both windows count tokens (CLD-D22, DRV-1.27). The stream carries no other window: `unifiedWindows` held
+    # `five_hour` and `seven_day` only when probed on 26 October 2026 (SGM-D26); an unknown key is left unmapped.
     info = record.get('rate_limit_info')
     if not isinstance(info, dict) or not isinstance(info.get('unifiedWindows'), dict):
         return None
@@ -168,7 +170,7 @@ def limit_report(record: Record) -> Record | None:
         raw = info['unifiedWindows'].get(key)
         if not isinstance(raw, dict):
             continue
-        window = {'kind': kind, 'label': label, 'windowMinutes': minutes}
+        window = {'kind': kind, 'label': label, 'resource': 'tokens', 'windowMinutes': minutes}
         utilization = raw.get('utilization')
         if number(utilization) and utilization >= 0:
             window.update(usedPercent=utilization * 100, limitReached=utilization >= 1)

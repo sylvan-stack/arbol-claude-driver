@@ -22,7 +22,7 @@ from arbol_claude_driver.history import MessageDigest, digest, encode_folder, re
 from arbol_claude_driver.dev import live_check  # noqa: E402
 from arbol_claude_driver.models import ValidatedRequest  # noqa: E402
 from arbol_claude_driver.processes import child_command, kill_group, python_launcher, remaining_groups, supported_version  # noqa: E402
-from arbol_claude_driver.protocol import Output, RunEvents, RunProtocol, run_failure, truncate_result  # noqa: E402
+from arbol_claude_driver.protocol import Output, RunEvents, RunProtocol, limit_report, run_failure, truncate_result  # noqa: E402
 from arbol_claude_driver.request import read_request, run_arguments  # noqa: E402
 from arbol_claude_driver.state import State, owner_alive, parse_owner, process_owner, read_json, write_json  # noqa: E402
 from arbol_claude_driver.subscriptions import Authentication, Secrets, Subscriptions, family_settings, keychain_service, normalize_quota, validate_key  # noqa: E402
@@ -170,6 +170,19 @@ class CompatibilityTests(unittest.TestCase):
         self.assertEqual([window['usedPercent'] for window in report['windows']], [25, 40, 7])
         self.assertEqual(report['windows'][0]['windowMinutes'], 300)
         self.assertNotIn('resetsAt', report['windows'][0])
+        # DRV-1.27: a token, a credit and the MCP call allowance say what they count.
+        self.assertEqual([(window['label'], window['resource']) for window in report['windows']], [('5-hour window', 'tokens'), ('Weekly window', 'credits'), ('MCP', 'calls')])
+
+    def test_limit_report_windows_count_tokens_and_map_nothing_else(self) -> None:
+        info = {'status': 'allowed', 'rateLimitType': 'five_hour', 'isUsingOverage': False, 'unifiedWindows': {
+            'five_hour': {'utilization': .63, 'resetsAt': 1793062800}, 'seven_day': {'utilization': .15, 'resetsAt': 1793592000},
+            'seven_day_opus': {'utilization': .5, 'resetsAt': 1793592000}}}
+        report = limit_report({'type': 'rate_limit_event', 'rate_limit_info': info})
+        assert report is not None
+        self.assertEqual([(window['kind'], window['label'], window['resource']) for window in report['windows']], [('session', 'Five hours', 'tokens'), ('weekly', 'Seven days', 'tokens')])
+        self.assertEqual([window['usedPercent'] for window in report['windows']], [63, 15])
+        self.assertEqual(report['extra'], {'status': 'allowed', 'rateLimitType': 'five_hour', 'isUsingOverage': False})
+        self.assertIsNone(limit_report({'type': 'rate_limit_event', 'rate_limit_info': {'status': 'allowed'}}))
 
     def test_command_frame_rejects_unknowns_and_preserves_literal_prompt(self) -> None:
         parsed = parse_arguments(['--state-dir', '/state', 'run', '--tools=none', '--label', 'x=a=b', '--', '--literal'])
