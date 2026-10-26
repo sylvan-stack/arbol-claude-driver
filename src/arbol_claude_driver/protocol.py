@@ -160,7 +160,7 @@ def retry_wait(text: str) -> float | None:
 
 
 def limit_report(record: Record) -> Record | None:
-    # Both windows count tokens (CLD-D22, DRV-1.27). The stream carries no other window: `unifiedWindows` held
+    # Both windows count tokens (CLD-D23, DRV-1.27). The stream carries no other window: `unifiedWindows` held
     # `five_hour` and `seven_day` only when probed on 26 October 2026 (SGM-D26); an unknown key is left unmapped.
     info = record.get('rate_limit_info')
     if not isinstance(info, dict) or not isinstance(info.get('unifiedWindows'), dict):
