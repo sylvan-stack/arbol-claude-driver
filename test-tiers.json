@@ -18,8 +18,8 @@
   "tests": [
     {
       "repo": "arbol-claude-driver",
-      "file": "scripts/check_build.py",
-      "id": "scripts/check_build.py::unit",
+      "file": "tests/mid/archived/scripts/check_build.py",
+      "id": "tests/mid/archived/scripts/check_build.py::unit",
       "name": "unit",
       "class": "",
       "kind": "entrypoint",
@@ -29,13 +29,21 @@
       "end_before": 68,
       "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
       "review": "execution-default",
-      "line": 58,
-      "file_sha256": "cd4c087cfdf10c41c9539bd82173dfc57cb5f2fe22694324a7b61e91a3598f99"
+      "line": 4,
+      "file_sha256": "753a79248d32b41ce33c564a9f51ce720b15c439c1c46627c4deba84de1aadd7",
+      "previous_id": "scripts/check_build.py::unit",
+      "previous_file": "scripts/check_build.py",
+      "previous_line": 58,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "scripts/check_build.py",
+      "archive_block_id": "scripts/check_build.py::unit",
+      "description": "Coordinates the packaged unit-test gate for a candidate Build.",
+      "assertion_examples": []
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "scripts/check_build.py",
-      "id": "scripts/check_build.py::contract",
+      "file": "tests/mid/archived/scripts/check_build.py",
+      "id": "tests/mid/archived/scripts/check_build.py::contract",
       "name": "contract",
       "class": "",
       "kind": "entrypoint",
@@ -45,13 +53,21 @@
       "end_before": 78,
       "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
       "review": "execution-default",
-      "line": 72,
-      "file_sha256": "cd4c087cfdf10c41c9539bd82173dfc57cb5f2fe22694324a7b61e91a3598f99"
+      "line": 15,
+      "file_sha256": "753a79248d32b41ce33c564a9f51ce720b15c439c1c46627c4deba84de1aadd7",
+      "previous_id": "scripts/check_build.py::contract",
+      "previous_file": "scripts/check_build.py",
+      "previous_line": 72,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "scripts/check_build.py",
+      "archive_block_id": "scripts/check_build.py::contract",
+      "description": "Coordinates the shared compatibility and conformance gate for a candidate Build.",
+      "assertion_examples": []
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "scripts/check_build.py",
-      "id": "scripts/check_build.py::live",
+      "file": "tests/mid/archived/scripts/check_build.py",
+      "id": "tests/mid/archived/scripts/check_build.py::live",
       "name": "live",
       "class": "",
       "kind": "entrypoint",
@@ -61,13 +77,21 @@
       "end_before": 88,
       "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
       "review": "execution-default",
-      "line": 87,
-      "file_sha256": "cd4c087cfdf10c41c9539bd82173dfc57cb5f2fe22694324a7b61e91a3598f99"
+      "line": 26,
+      "file_sha256": "753a79248d32b41ce33c564a9f51ce720b15c439c1c46627c4deba84de1aadd7",
+      "previous_id": "scripts/check_build.py::live",
+      "previous_file": "scripts/check_build.py",
+      "previous_line": 87,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "scripts/check_build.py",
+      "archive_block_id": "scripts/check_build.py::live",
+      "description": "Exercises the live provider boundary of a candidate Build.",
+      "assertion_examples": []
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "scripts/verify_build.py",
-      "id": "scripts/verify_build.py",
+      "file": "tests/mid/archived/scripts/verify_build.py",
+      "id": "tests/mid/archived/scripts/verify_build.py",
       "name": "verify_build",
       "class": "",
       "kind": "program",
@@ -77,13 +101,21 @@
       "end_before": 157,
       "reason": "Standalone browser, native, installation or qualification program. Its combined checks need a dedicated testing task; the whole program has no individually justified top-tier selection.",
       "review": "program",
-      "line": 1,
-      "file_sha256": "b81e82f4c0243677268fb8de25c1ef8a6ba3f1656c84e4d2656a34cbe55f89a3"
+      "line": 4,
+      "file_sha256": "688f95e36c0001e7d7e38dec8e88bdf02081c418145ae751c634394461cdacb5",
+      "previous_id": "scripts/verify_build.py",
+      "previous_file": "scripts/verify_build.py",
+      "previous_line": 1,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "scripts/verify_build.py",
+      "archive_block_id": "scripts/verify_build.py",
+      "description": "Standalone verify build check program; its combined scenarios are retained together.",
+      "assertion_examples": []
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "src/arbol_claude_driver/dev.py",
-      "id": "src/arbol_claude_driver/dev.py::probe",
+      "file": "tests/mid/archived/src/arbol_claude_driver/dev.py",
+      "id": "tests/mid/archived/src/arbol_claude_driver/dev.py::probe",
       "name": "probe",
       "class": "",
       "kind": "entrypoint",
@@ -93,13 +125,24 @@
       "end_before": 155,
       "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
       "review": "execution-default",
-      "line": 27,
-      "file_sha256": "9611bdcd035ace274eaf14d97922ccbed6aa045590b8a9f7287a483c1d92d1cc"
+      "line": 4,
+      "file_sha256": "d4ca320fce876ebc9beee7fddf59310c29d10a8050700b53ff6074bdee1b4ca1",
+      "previous_id": "src/arbol_claude_driver/dev.py::probe",
+      "previous_file": "src/arbol_claude_driver/dev.py",
+      "previous_line": 27,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "src/arbol_claude_driver/dev.py",
+      "archive_block_id": "src/arbol_claude_driver/dev.py::probe",
+      "description": "Exercises a protocol child through the diagnostic request and response workflow.",
+      "assertion_examples": [
+        "child.stdin and child.stdout and child.stderr",
+        "child.stdout and child.stderr"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "src/arbol_claude_driver/dev.py",
-      "id": "src/arbol_claude_driver/dev.py::live_check",
+      "file": "tests/mid/archived/src/arbol_claude_driver/dev.py",
+      "id": "tests/mid/archived/src/arbol_claude_driver/dev.py::live_check",
       "name": "live_check",
       "class": "",
       "kind": "entrypoint",
@@ -109,13 +152,23 @@
       "end_before": 261,
       "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
       "review": "execution-default",
-      "line": 167,
-      "file_sha256": "9611bdcd035ace274eaf14d97922ccbed6aa045590b8a9f7287a483c1d92d1cc"
+      "line": 123,
+      "file_sha256": "d4ca320fce876ebc9beee7fddf59310c29d10a8050700b53ff6074bdee1b4ca1",
+      "previous_id": "src/arbol_claude_driver/dev.py::live_check",
+      "previous_file": "src/arbol_claude_driver/dev.py",
+      "previous_line": 167,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "src/arbol_claude_driver/dev.py",
+      "archive_block_id": "src/arbol_claude_driver/dev.py::live_check",
+      "description": "Exercises the native or provider-facing live workflow and its protocol result.",
+      "assertion_examples": [
+        "child.stdin and child.stdout and child.stderr"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_cutover.py",
-      "id": "tests/test_cutover.py::RetiredRoutes.test_every_retired_selector_refuses_and_preserves_history",
+      "file": "tests/mid/test_mid_cutover.py",
+      "id": "tests/mid/test_mid_cutover.py::RetiredRoutes.test_every_retired_selector_refuses_and_preserves_history",
       "name": "test_every_retired_selector_refuses_and_preserves_history",
       "class": "RetiredRoutes",
       "kind": "python",
@@ -125,13 +178,24 @@
       "end_before": 67,
       "reason": "Scenario: every retired selector refuses and preserves history. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 51,
-      "file_sha256": "6c0d2562859e434049c74d12f0902282612d556690423f20592530b0a6843c54"
+      "line": 19,
+      "file_sha256": "fab5260c24d90b258106735097667da8ca592912976fbd324952441949f60ba9",
+      "previous_id": "tests/test_cutover.py::RetiredRoutes.test_every_retired_selector_refuses_and_preserves_history",
+      "previous_file": "tests/test_cutover.py",
+      "previous_line": 51,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_cutover.py",
+      "description": "Every retired selector refuses and preserves history.",
+      "assertion_examples": [
+        "self.assertEqual(json.loads((self.retired / 'record.json').read_text()), self.record)",
+        "self.assertEqual((self.retired / 'history.json').read_text(), 'historical conversation')",
+        "self.assertEqual([item['id'] for item in listed], ['anthropic'])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_cutover.py",
-      "id": "tests/test_cutover.py::RetiredRoutes.test_gateway_defaults_and_settings_fail_before_native_start",
+      "file": "tests/mid/test_mid_cutover.py",
+      "id": "tests/mid/test_mid_cutover.py::RetiredRoutes.test_gateway_defaults_and_settings_fail_before_native_start",
       "name": "test_gateway_defaults_and_settings_fail_before_native_start",
       "class": "RetiredRoutes",
       "kind": "python",
@@ -141,13 +205,20 @@
       "end_before": 77,
       "reason": "Scenario: gateway defaults and settings fail before native start. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 70,
-      "file_sha256": "6c0d2562859e434049c74d12f0902282612d556690423f20592530b0a6843c54"
+      "line": 38,
+      "file_sha256": "fab5260c24d90b258106735097667da8ca592912976fbd324952441949f60ba9",
+      "previous_id": "tests/test_cutover.py::RetiredRoutes.test_gateway_defaults_and_settings_fail_before_native_start",
+      "previous_file": "tests/test_cutover.py",
+      "previous_line": 70,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_cutover.py",
+      "description": "Gateway defaults and settings fail before native start.",
+      "assertion_examples": []
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_cutover.py",
-      "id": "tests/test_cutover.py::RetiredRoutes.test_incomplete_concurrent_creation_is_not_a_sign_in_to_recover",
+      "file": "tests/mid/test_mid_cutover.py",
+      "id": "tests/mid/test_mid_cutover.py::RetiredRoutes.test_incomplete_concurrent_creation_is_not_a_sign_in_to_recover",
       "name": "test_incomplete_concurrent_creation_is_not_a_sign_in_to_recover",
       "class": "RetiredRoutes",
       "kind": "python",
@@ -157,13 +228,24 @@
       "end_before": 85,
       "reason": "Scenario: incomplete concurrent creation is not a sign in to recover. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 82,
-      "file_sha256": "6c0d2562859e434049c74d12f0902282612d556690423f20592530b0a6843c54"
+      "line": 50,
+      "file_sha256": "fab5260c24d90b258106735097667da8ca592912976fbd324952441949f60ba9",
+      "previous_id": "tests/test_cutover.py::RetiredRoutes.test_incomplete_concurrent_creation_is_not_a_sign_in_to_recover",
+      "previous_file": "tests/test_cutover.py",
+      "previous_line": 82,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_cutover.py",
+      "description": "Incomplete concurrent creation is not a sign in to recover.",
+      "assertion_examples": [
+        "self.assertEqual(result.returncode, 0, result.stdout + result.stderr)",
+        "self.assertEqual(json.loads(result.stdout)['family'], 'anthropic')",
+        "self.assertEqual((self.retired / 'history.json').read_text(), 'historical conversation')"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_packaging.py",
-      "id": "tests/test_packaging.py::PackagingTests.test_corrupted_cached_distribution_is_refused_without_a_download",
+      "file": "tests/mid/test_mid_packaging.py",
+      "id": "tests/mid/test_mid_packaging.py::PackagingTests.test_corrupted_cached_distribution_is_refused_without_a_download",
       "name": "test_corrupted_cached_distribution_is_refused_without_a_download",
       "class": "PackagingTests",
       "kind": "python",
@@ -174,12 +256,22 @@
       "reason": "Scenario: corrupted cached distribution is refused without a download. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 14,
-      "file_sha256": "7e5a6c7e1cd8bc01a678833ecae174feb607e1fb295b20f379a8c02442852a21"
+      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "previous_id": "tests/test_packaging.py::PackagingTests.test_corrupted_cached_distribution_is_refused_without_a_download",
+      "previous_file": "tests/test_packaging.py",
+      "previous_line": 14,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_packaging.py",
+      "description": "Corrupted cached distribution is refused without a download.",
+      "assertion_examples": [
+        "download.assert_not_called()",
+        "self.assertRaisesRegex(ValueError, 'wrong SHA-256')"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_packaging.py",
-      "id": "tests/test_packaging.py::PackagingTests.test_archive_pin_rejects_nonhex_digests_and_untrusted_sources",
+      "file": "tests/mid/test_mid_packaging.py",
+      "id": "tests/mid/test_mid_packaging.py::PackagingTests.test_archive_pin_rejects_nonhex_digests_and_untrusted_sources",
       "name": "test_archive_pin_rejects_nonhex_digests_and_untrusted_sources",
       "class": "PackagingTests",
       "kind": "python",
@@ -190,12 +282,22 @@
       "reason": "Scenario: archive pin rejects nonhex digests and untrusted sources. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
       "line": 26,
-      "file_sha256": "7e5a6c7e1cd8bc01a678833ecae174feb607e1fb295b20f379a8c02442852a21"
+      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "previous_id": "tests/test_packaging.py::PackagingTests.test_archive_pin_rejects_nonhex_digests_and_untrusted_sources",
+      "previous_file": "tests/test_packaging.py",
+      "previous_line": 26,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_packaging.py",
+      "description": "Archive pin rejects nonhex digests and untrusted sources.",
+      "assertion_examples": [
+        "download.assert_not_called()",
+        "self.assertRaisesRegex(ValueError, 'pinned URL and SHA-256')"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_packaging.py",
-      "id": "tests/test_packaging.py::PackagingTests.test_candidate_cannot_overwrite_a_numbered_build",
+      "file": "tests/mid/test_mid_packaging.py",
+      "id": "tests/mid/test_mid_packaging.py::PackagingTests.test_candidate_cannot_overwrite_a_numbered_build",
       "name": "test_candidate_cannot_overwrite_a_numbered_build",
       "class": "PackagingTests",
       "kind": "python",
@@ -205,13 +307,22 @@
       "end_before": 45,
       "reason": "Scenario: candidate cannot overwrite a numbered build. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 37,
-      "file_sha256": "7e5a6c7e1cd8bc01a678833ecae174feb607e1fb295b20f379a8c02442852a21"
+      "line": 36,
+      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "previous_id": "tests/test_packaging.py::PackagingTests.test_candidate_cannot_overwrite_a_numbered_build",
+      "previous_file": "tests/test_packaging.py",
+      "previous_line": 37,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_packaging.py",
+      "description": "Candidate cannot overwrite a numbered build.",
+      "assertion_examples": [
+        "self.assertRaisesRegex(ValueError, 'cannot replace a numbered Build')"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_packaging.py",
-      "id": "tests/test_packaging.py::PackagingTests.test_build_record_requires_matching_number_entry_and_version",
+      "file": "tests/mid/test_mid_packaging.py",
+      "id": "tests/mid/test_mid_packaging.py::PackagingTests.test_build_record_requires_matching_number_entry_and_version",
       "name": "test_build_record_requires_matching_number_entry_and_version",
       "class": "PackagingTests",
       "kind": "python",
@@ -221,13 +332,23 @@
       "end_before": 60,
       "reason": "Scenario: build record requires matching number entry and version. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 45,
-      "file_sha256": "7e5a6c7e1cd8bc01a678833ecae174feb607e1fb295b20f379a8c02442852a21"
+      "line": 44,
+      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "previous_id": "tests/test_packaging.py::PackagingTests.test_build_record_requires_matching_number_entry_and_version",
+      "previous_file": "tests/test_packaging.py",
+      "previous_line": 45,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_packaging.py",
+      "description": "Build record requires matching number entry and version.",
+      "assertion_examples": [
+        "self.assertRaisesRegex(ValueError, 'match this component, number and package version')",
+        "self.assertRaisesRegex(ValueError, 'executable entry')"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_packaging.py",
-      "id": "tests/test_packaging.py::PackagingTests.test_live_gate_uses_the_test_state_directory",
+      "file": "tests/mid/test_mid_packaging.py",
+      "id": "tests/mid/test_mid_packaging.py::PackagingTests.test_live_gate_uses_the_test_state_directory",
       "name": "test_live_gate_uses_the_test_state_directory",
       "class": "PackagingTests",
       "kind": "python",
@@ -237,13 +358,24 @@
       "end_before": 75,
       "reason": "Scenario: live gate uses the test state directory. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 62,
-      "file_sha256": "7e5a6c7e1cd8bc01a678833ecae174feb607e1fb295b20f379a8c02442852a21"
+      "line": 61,
+      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "previous_id": "tests/test_packaging.py::PackagingTests.test_live_gate_uses_the_test_state_directory",
+      "previous_file": "tests/test_packaging.py",
+      "previous_line": 62,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_packaging.py",
+      "description": "Live gate uses the test state directory.",
+      "assertion_examples": [
+        "self.assertEqual(execute.call_args.args[0][1:], ['dev', 'build-check', '--state-dir', str(home / 'Library/Application Support/Arbol/drivers/arbol-claude-driver')])",
+        "self.assertEqual(execute.call_args.args[0][-1], '/tmp/other state')",
+        "self.assertEqual(check_build.live(Path('/tmp/candidate')), 0)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_packaging.py",
-      "id": "tests/test_packaging.py::PackagingTests.test_unit_gate_refuses_an_empty_suite",
+      "file": "tests/mid/test_mid_packaging.py",
+      "id": "tests/mid/test_mid_packaging.py::PackagingTests.test_unit_gate_refuses_an_empty_suite",
       "name": "test_unit_gate_refuses_an_empty_suite",
       "class": "PackagingTests",
       "kind": "python",
@@ -253,13 +385,22 @@
       "end_before": 87,
       "reason": "Scenario: unit gate refuses an empty suite. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 80,
-      "file_sha256": "7e5a6c7e1cd8bc01a678833ecae174feb607e1fb295b20f379a8c02442852a21"
+      "line": 78,
+      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "previous_id": "tests/test_packaging.py::PackagingTests.test_unit_gate_refuses_an_empty_suite",
+      "previous_file": "tests/test_packaging.py",
+      "previous_line": 80,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_packaging.py",
+      "description": "Unit gate refuses an empty suite.",
+      "assertion_examples": [
+        "self.assertRaisesRegex(ValueError, 'no tests')"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_golden_histories_and_every_incremental_snapshot",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_golden_histories_and_every_incremental_snapshot",
       "name": "test_golden_histories_and_every_incremental_snapshot",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -269,13 +410,24 @@
       "end_before": 47,
       "reason": "Scenario: golden histories and every incremental snapshot. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 27,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 42,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_golden_histories_and_every_incremental_snapshot",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 27,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Golden histories and every incremental snapshot.",
+      "assertion_examples": [
+        "self.assertEqual(value.snapshot(), {key: case['canonical'][key] for key in ('messages', 'digest')})",
+        "self.assertEqual(snapshots, expected['snapshots'])",
+        "self.assertNotEqual(value.snapshot()['digest'], case['expected']['claude']['digest'])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_golden_chat_keys_utf16_paths_and_keychain_identity",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_golden_chat_keys_utf16_paths_and_keychain_identity",
       "name": "test_golden_chat_keys_utf16_paths_and_keychain_identity",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -285,13 +437,24 @@
       "end_before": 63,
       "reason": "Scenario: golden chat keys utf16 paths and keychain identity. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 44,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 59,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_golden_chat_keys_utf16_paths_and_keychain_identity",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 44,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Golden chat keys utf16 paths and keychain identity.",
+      "assertion_examples": [
+        "self.assertEqual(keychain_service(Path('/example-home/Library/Application Support/Arbol/drivers/claude'), '/example-home'), vectors['keychain']['defaultService'])",
+        "self.assertEqual(keychain_service(Path(example['realPath'])), example['service'])",
+        "self.assertEqual(digest(case['chat']), case['expected']['claude'])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_json_stringify_numbers_indices_controls_and_surrogates",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_json_stringify_numbers_indices_controls_and_surrogates",
       "name": "test_json_stringify_numbers_indices_controls_and_surrogates",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -301,13 +464,24 @@
       "end_before": 73,
       "reason": "Scenario: json stringify numbers indices controls and surrogates. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 62,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 77,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_json_stringify_numbers_indices_controls_and_surrogates",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 62,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Json stringify numbers indices controls and surrogates.",
+      "assertion_examples": [
+        "self.assertFalse(number(10 ** 400))",
+        "self.assertEqual(compact(10 ** 400), 'null')",
+        "self.assertEqual(compact({'z': 1.0, '10': 1e-06, '2': 1e+21, '01': -0.0}), '{\"2\":1e+21,\"10\":0.000001,\"z\":1,\"01\":0}')"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_independent_node24_json_golden_vectors",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_independent_node24_json_golden_vectors",
       "name": "test_independent_node24_json_golden_vectors",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -317,13 +491,22 @@
       "end_before": 79,
       "reason": "Scenario: independent node24 json golden vectors. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 74,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 89,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_independent_node24_json_golden_vectors",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 74,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Independent node24 json golden vectors.",
+      "assertion_examples": [
+        "self.assertEqual(compact(loads(case['inputJson'])), case['expected'])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_native_history_links_images_shell_and_error_results",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_native_history_links_images_shell_and_error_results",
       "name": "test_native_history_links_images_shell_and_error_results",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -333,13 +516,24 @@
       "end_before": 96,
       "reason": "Scenario: native history links images shell and error results. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 82,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 97,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_native_history_links_images_shell_and_error_results",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 82,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Native history links images shell and error results.",
+      "assertion_examples": [
+        "self.assertEqual(len(rows), 3)",
+        "self.assertIsNone(rows[0]['parentUuid'])",
+        "self.assertEqual(rows[1]['parentUuid'], rows[0]['uuid'])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_failure_closed_codes_retryability_redaction_and_truncation",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_failure_closed_codes_retryability_redaction_and_truncation",
       "name": "test_failure_closed_codes_retryability_redaction_and_truncation",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -349,13 +543,24 @@
       "end_before": 106,
       "reason": "Scenario: failure closed codes retryability redaction and truncation. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 101,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 116,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_failure_closed_codes_retryability_redaction_and_truncation",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 101,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Failure closed codes retryability redaction and truncation.",
+      "assertion_examples": [
+        "self.assertTrue(error.result['retryable'])",
+        "self.assertNotIn('secret', compact(error.result))",
+        "self.assertLessEqual(len(utf8(error.result['detail']['excerpt'])), 1024)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_settings_unknown_values_withheld_and_environment_allowlist",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_settings_unknown_values_withheld_and_environment_allowlist",
       "name": "test_settings_unknown_values_withheld_and_environment_allowlist",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -365,13 +570,24 @@
       "end_before": 157,
       "reason": "Scenario: settings unknown values withheld and environment allowlist. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 113,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 128,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_settings_unknown_values_withheld_and_environment_allowlist",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 113,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Settings unknown values withheld and environment allowlist.",
+      "assertion_examples": [
+        "self.assertEqual(env['HOME'], '/account')",
+        "self.assertEqual(env['CLAUDE_CONFIG_DIR'], '/config')",
+        "self.assertNotIn('NODE_OPTIONS', env)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_key_validation_and_quota_math_resets_and_order",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_key_validation_and_quota_math_resets_and_order",
       "name": "test_key_validation_and_quota_math_resets_and_order",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -381,13 +597,24 @@
       "end_before": 174,
       "reason": "Scenario: key validation and quota math resets and order. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 166,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 181,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_key_validation_and_quota_math_resets_and_order",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 166,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Key validation and quota math resets and order.",
+      "assertion_examples": [
+        "self.assertIn('U+000A', str(caught.exception))",
+        "self.assertEqual([window['usedPercent'] for window in report['windows']], [25, 40, 7])",
+        "self.assertEqual(report['windows'][0]['windowMinutes'], 300)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_limit_report_windows_count_tokens_and_map_nothing_else",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_limit_report_windows_count_tokens_and_map_nothing_else",
       "name": "test_limit_report_windows_count_tokens_and_map_nothing_else",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -397,13 +624,24 @@
       "end_before": 185,
       "reason": "Scenario: limit report windows count tokens and map nothing else. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 185,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 200,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_limit_report_windows_count_tokens_and_map_nothing_else",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 185,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Limit report windows count tokens and map nothing else.",
+      "assertion_examples": [
+        "report is not None",
+        "self.assertEqual([(window['kind'], window['label'], window['resource']) for window in report['windows']], [('session', 'Five hours', 'tokens'), ('weekly', 'Seven days', 'tokens')])",
+        "self.assertEqual([window['usedPercent'] for window in report['windows']], [63, 15])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CompatibilityTests.test_command_frame_rejects_unknowns_and_preserves_literal_prompt",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CompatibilityTests.test_command_frame_rejects_unknowns_and_preserves_literal_prompt",
       "name": "test_command_frame_rejects_unknowns_and_preserves_literal_prompt",
       "class": "CompatibilityTests",
       "kind": "python",
@@ -413,13 +651,24 @@
       "end_before": 196,
       "reason": "Scenario: command frame rejects unknowns and preserves literal prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 198,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 213,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CompatibilityTests.test_command_frame_rejects_unknowns_and_preserves_literal_prompt",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 198,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Command frame rejects unknowns and preserves literal prompt.",
+      "assertion_examples": [
+        "self.assertEqual(parsed.positionals, ['--literal'])",
+        "self.assertEqual(parsed.options['label'], ['x=a=b'])",
+        "self.assertTrue(supported_version('2.1.289'))"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::ProcessGroupTests.test_a_group_that_has_exited_but_is_not_reaped_is_ending",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::ProcessGroupTests.test_a_group_that_has_exited_but_is_not_reaped_is_ending",
       "name": "test_a_group_that_has_exited_but_is_not_reaped_is_ending",
       "class": "ProcessGroupTests",
       "kind": "python",
@@ -429,13 +678,20 @@
       "end_before": 210,
       "reason": "Scenario: a group that has exited but is not reaped is ending. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 214,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 229,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::ProcessGroupTests.test_a_group_that_has_exited_but_is_not_reaped_is_ending",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 214,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "A group that has exited but is not reaped is ending.",
+      "assertion_examples": []
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::StateTests.test_private_atomic_state_and_newer_format_is_untouched",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::StateTests.test_private_atomic_state_and_newer_format_is_untouched",
       "name": "test_private_atomic_state_and_newer_format_is_untouched",
       "class": "StateTests",
       "kind": "python",
@@ -445,13 +701,24 @@
       "end_before": 234,
       "reason": "Scenario: private atomic state and newer format is untouched. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 239,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 246,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::StateTests.test_private_atomic_state_and_newer_format_is_untouched",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 239,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Private atomic state and newer format is untouched.",
+      "assertion_examples": [
+        "self.assertEqual(read_json(file), {'unicode': '😀'})",
+        "self.assertEqual(stat.S_IMODE(file.stat().st_mode), 384)",
+        "self.assertEqual(stat.S_IMODE(file.parent.stat().st_mode), 448)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::StateTests.test_process_identity_and_lock_contention",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::StateTests.test_process_identity_and_lock_contention",
       "name": "test_process_identity_and_lock_contention",
       "class": "StateTests",
       "kind": "python",
@@ -461,13 +728,24 @@
       "end_before": 253,
       "reason": "Scenario: process identity and lock contention. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 254,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 261,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::StateTests.test_process_identity_and_lock_contention",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 254,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Process identity and lock contention.",
+      "assertion_examples": [
+        "owner",
+        "self.assertIsNotNone(owner)",
+        "self.assertTrue(await owner_alive(owner))"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::StateTests.test_recovery_never_deletes_or_overwrites_a_newer_run",
+      "file": "tests/top/test_top_runtime.py",
+      "id": "tests/top/test_top_runtime.py::StateTests.test_recovery_never_deletes_or_overwrites_a_newer_run",
       "name": "test_recovery_never_deletes_or_overwrites_a_newer_run",
       "class": "StateTests",
       "kind": "python",
@@ -477,13 +755,19 @@
       "end_before": 277,
       "reason": "Replaces a run while its stale recovery is awaiting cleanup, in both success and failure paths. The newer record and its evidence must survive; a simple sequential recovery test cannot establish this.",
       "review": "individual",
-      "line": 275,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 21,
+      "file_sha256": "5b1a0fc09cc2f4b8a4c1d88e094d601eb5715eecd96c7dc642ffd31a78df1ab8",
+      "previous_id": "tests/test_runtime.py::StateTests.test_recovery_never_deletes_or_overwrites_a_newer_run",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 275,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "selector": "test_top_runtime.StateTests.test_recovery_never_deletes_or_overwrites_a_newer_run",
+      "support_file": "tests/test_runtime.py"
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::StateTests.test_duplicate_run_identifiers_and_safe_paths",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::StateTests.test_duplicate_run_identifiers_and_safe_paths",
       "name": "test_duplicate_run_identifiers_and_safe_paths",
       "class": "StateTests",
       "kind": "python",
@@ -493,13 +777,24 @@
       "end_before": 289,
       "reason": "Scenario: duplicate run identifiers and safe paths. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 299,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 282,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::StateTests.test_duplicate_run_identifiers_and_safe_paths",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 299,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Duplicate run identifiers and safe paths.",
+      "assertion_examples": [
+        "self.assertEqual(caught.exception.result['code'], 'in_use')",
+        "self.assertNotEqual(Chats(self.state).path('anthropic', digest('chat')), Chats(self.state).path('zai', digest('chat')))",
+        "self.assertRaises(Failure)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state",
       "name": "test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state",
       "class": "StateTests",
       "kind": "python",
@@ -509,13 +804,24 @@
       "end_before": 304,
       "reason": "Scenario: subscriptions late check and usage cannot overwrite newer state. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 313,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 296,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 313,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Subscriptions late check and usage cannot overwrite newer state.",
+      "assertion_examples": [
+        "self.assertEqual(latest['state'], 'signed_out')",
+        "self.assertEqual(latest['label'], 'Latest')",
+        "self.assertNotIn('lastUsage', latest)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::StateTests.test_legacy_split_surrogate_map_rebuilds_safely",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::StateTests.test_legacy_split_surrogate_map_rebuilds_safely",
       "name": "test_legacy_split_surrogate_map_rebuilds_safely",
       "class": "StateTests",
       "kind": "python",
@@ -525,13 +831,24 @@
       "end_before": 319,
       "reason": "Scenario: legacy split surrogate map rebuilds safely. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 330,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 313,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::StateTests.test_legacy_split_surrogate_map_rebuilds_safely",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 330,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Legacy split surrogate map rebuilds safely.",
+      "assertion_examples": [
+        "self.assertEqual(plan['continuity'], 'rebuilt')",
+        "self.assertEqual(plan['rebuildReason'], 'history_differs')",
+        "self.assertFalse(plan['resume'])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::StateTests.test_failed_live_check_reports_observed_cost_and_one_attempt",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::StateTests.test_failed_live_check_reports_observed_cost_and_one_attempt",
       "name": "test_failed_live_check_reports_observed_cost_and_one_attempt",
       "class": "StateTests",
       "kind": "python",
@@ -541,13 +858,24 @@
       "end_before": 337,
       "reason": "Scenario: failed live check reports observed cost and one attempt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 347,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 330,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::StateTests.test_failed_live_check_reports_observed_cost_and_one_attempt",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 347,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Failed live check reports observed cost and one attempt.",
+      "assertion_examples": [
+        "self.assertEqual(status, 1)",
+        "self.assertEqual(report['inferenceRequests'], 1)",
+        "self.assertEqual(report['turnsAttempted'], 1)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::StateTests.test_live_check_signed_in_gate_precedes_tool_and_prompt",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::StateTests.test_live_check_signed_in_gate_precedes_tool_and_prompt",
       "name": "test_live_check_signed_in_gate_precedes_tool_and_prompt",
       "class": "StateTests",
       "kind": "python",
@@ -557,13 +885,24 @@
       "end_before": 347,
       "reason": "Scenario: live check signed in gate precedes tool and prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 367,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 350,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::StateTests.test_live_check_signed_in_gate_precedes_tool_and_prompt",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 367,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Live check signed in gate precedes tool and prompt.",
+      "assertion_examples": [
+        "self.assertEqual(caught.exception.result['code'], 'not_signed_in')",
+        "inspect.assert_not_called()",
+        "spawn.assert_not_called()"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::TransportTests.test_generated_python_helper_quotes_spaced_interpreter_and_arguments",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::TransportTests.test_generated_python_helper_quotes_spaced_interpreter_and_arguments",
       "name": "test_generated_python_helper_quotes_spaced_interpreter_and_arguments",
       "class": "TransportTests",
       "kind": "python",
@@ -573,13 +912,24 @@
       "end_before": 361,
       "reason": "Scenario: generated python helper quotes spaced interpreter and arguments. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 381,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 365,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::TransportTests.test_generated_python_helper_quotes_spaced_interpreter_and_arguments",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 381,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Generated python helper quotes spaced interpreter and arguments.",
+      "assertion_examples": [
+        "self.assertEqual(result['code'], 0)",
+        "self.assertEqual(result['stdout'], repr(arguments) + '\\n')",
+        "self.assertTrue(helper.read_text().startswith('#!/bin/sh\\nexec '))"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::TransportTests.test_child_command_drains_stderr_and_honors_cancel",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::TransportTests.test_child_command_drains_stderr_and_honors_cancel",
       "name": "test_child_command_drains_stderr_and_honors_cancel",
       "class": "TransportTests",
       "kind": "python",
@@ -589,13 +939,24 @@
       "end_before": 372,
       "reason": "Scenario: child command drains stderr and honors cancel. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 395,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 379,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::TransportTests.test_child_command_drains_stderr_and_honors_cancel",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 395,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Child command drains stderr and honors cancel.",
+      "assertion_examples": [
+        "self.assertEqual(result, {'code': 0, 'stdout': 'ok\\n'})",
+        "self.assertLess(time.monotonic() - started, 1)",
+        "self.assertRaises(Failure)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::TransportTests.test_detached_pipe_holder_cannot_keep_command_alive",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::TransportTests.test_detached_pipe_holder_cannot_keep_command_alive",
       "name": "test_detached_pipe_holder_cannot_keep_command_alive",
       "class": "TransportTests",
       "kind": "python",
@@ -605,13 +966,23 @@
       "end_before": 388,
       "reason": "Scenario: detached pipe holder cannot keep command alive. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 408,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 392,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::TransportTests.test_detached_pipe_holder_cannot_keep_command_alive",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 408,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Detached pipe holder cannot keep command alive.",
+      "assertion_examples": [
+        "self.assertEqual(result['code'], 0)",
+        "self.assertLess(time.monotonic() - started, 2)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::TransportTests.test_output_backpressure_uses_one_absolute_stop_deadline",
+      "file": "tests/top/test_top_runtime.py",
+      "id": "tests/top/test_top_runtime.py::TransportTests.test_output_backpressure_uses_one_absolute_stop_deadline",
       "name": "test_output_backpressure_uses_one_absolute_stop_deadline",
       "class": "TransportTests",
       "kind": "python",
@@ -621,13 +992,19 @@
       "end_before": 403,
       "reason": "Fills a real unread pipe, starts stopping, and requires the blocked write to end under one absolute deadline with cancellation signalled. Exposes shutdown hangs caused by blocked output.",
       "review": "individual",
-      "line": 426,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 48,
+      "file_sha256": "5b1a0fc09cc2f4b8a4c1d88e094d601eb5715eecd96c7dc642ffd31a78df1ab8",
+      "previous_id": "tests/test_runtime.py::TransportTests.test_output_backpressure_uses_one_absolute_stop_deadline",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 426,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "selector": "test_top_runtime.TransportTests.test_output_backpressure_uses_one_absolute_stop_deadline",
+      "support_file": "tests/test_runtime.py"
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::TransportTests.test_group_cleanup_refuses_a_reused_leader",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::TransportTests.test_group_cleanup_refuses_a_reused_leader",
       "name": "test_group_cleanup_refuses_a_reused_leader",
       "class": "TransportTests",
       "kind": "python",
@@ -637,13 +1014,22 @@
       "end_before": 407,
       "reason": "Scenario: group cleanup refuses a reused leader. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 441,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 410,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::TransportTests.test_group_cleanup_refuses_a_reused_leader",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 441,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Group cleanup refuses a reused leader.",
+      "assertion_examples": [
+        "self.assertEqual(remaining_groups([owner], [{'pid': 123, 'group': 456, 'zombie': False, 'startedAt': now(1)}]), [])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline",
       "name": "test_secret_command_fresh_environment_and_single_newline",
       "class": "TransportTests",
       "kind": "python",
@@ -653,13 +1039,24 @@
       "end_before": 424,
       "reason": "Scenario: secret command fresh environment and single newline. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 447,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 416,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 447,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Secret command fresh environment and single newline.",
+      "assertion_examples": [
+        "self.assertEqual(await secrets.read('account', source), '1key')",
+        "self.assertEqual(await secrets.read('account', source), '2key')",
+        "self.assertEqual(await secrets.read('account', source), 'key\\n')"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::RequestTests.test_typed_request_cli_replacement_labels_and_literal_prompt",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::RequestTests.test_typed_request_cli_replacement_labels_and_literal_prompt",
       "name": "test_typed_request_cli_replacement_labels_and_literal_prompt",
       "class": "RequestTests",
       "kind": "python",
@@ -669,13 +1066,24 @@
       "end_before": 444,
       "reason": "Scenario: typed request cli replacement labels and literal prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 473,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 438,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::RequestTests.test_typed_request_cli_replacement_labels_and_literal_prompt",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 473,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Typed request cli replacement labels and literal prompt.",
+      "assertion_examples": [
+        "self.assertIsInstance(parsed, ValidatedRequest)",
+        "self.assertEqual(parsed.tools, 'all')",
+        "self.assertEqual(parsed.record()['additionalDirectories'], ['/tmp'])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::RequestTests.test_malformed_nested_json_values_are_invalid_input",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::RequestTests.test_malformed_nested_json_values_are_invalid_input",
       "name": "test_malformed_nested_json_values_are_invalid_input",
       "class": "RequestTests",
       "kind": "python",
@@ -685,13 +1093,23 @@
       "end_before": 458,
       "reason": "Scenario: malformed nested json values are invalid input. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 488,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 453,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::RequestTests.test_malformed_nested_json_values_are_invalid_input",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 488,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Malformed nested json values are invalid input.",
+      "assertion_examples": [
+        "self.assertEqual(caught.exception.result['code'], 'invalid_input')",
+        "self.assertRaises(Failure)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::ProtocolTests.test_questions_validate_answers_duplicate_ack_and_withdrawal",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::ProtocolTests.test_questions_validate_answers_duplicate_ack_and_withdrawal",
       "name": "test_questions_validate_answers_duplicate_ack_and_withdrawal",
       "class": "ProtocolTests",
       "kind": "python",
@@ -701,13 +1119,24 @@
       "end_before": 496,
       "reason": "Scenario: questions validate answers duplicate ack and withdrawal. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 528,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 472,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::ProtocolTests.test_questions_validate_answers_duplicate_ack_and_withdrawal",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 528,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Questions validate answers duplicate ack and withdrawal.",
+      "assertion_examples": [
+        "self.assertIn('ask', self.protocol.questions)",
+        "self.assertFalse(await self.protocol.answer('ask', {'type': 'answers', 'answers': {'Choose': ['Blue']}}))",
+        "self.assertEqual(len(self.sent), 1)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::ProtocolTests.test_error_fields_override_wording_and_usage_never_double_counts",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::ProtocolTests.test_error_fields_override_wording_and_usage_never_double_counts",
       "name": "test_error_fields_override_wording_and_usage_never_double_counts",
       "class": "ProtocolTests",
       "kind": "python",
@@ -717,13 +1146,24 @@
       "end_before": 510,
       "reason": "Scenario: error fields override wording and usage never double counts. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 544,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 488,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::ProtocolTests.test_error_fields_override_wording_and_usage_never_double_counts",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 544,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Error fields override wording and usage never double counts.",
+      "assertion_examples": [
+        "self.assertEqual(error.result['code'], 'credential_rejected')",
+        "self.assertEqual(self.events.usage, {'inputTokens': 5, 'outputTokens': 6, 'model': 'haiku'})",
+        "self.assertNotIn('costUsd', self.events.usage)"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::ProtocolTests.test_utf8_tool_result_cut_and_single_final_cleanup",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::ProtocolTests.test_utf8_tool_result_cut_and_single_final_cleanup",
       "name": "test_utf8_tool_result_cut_and_single_final_cleanup",
       "class": "ProtocolTests",
       "kind": "python",
@@ -733,13 +1173,24 @@
       "end_before": 526,
       "reason": "Scenario: utf8 tool result cut and single final cleanup. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 560,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 504,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::ProtocolTests.test_utf8_tool_result_cut_and_single_final_cleanup",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 560,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Utf8 tool result cut and single final cleanup.",
+      "assertion_examples": [
+        "self.assertTrue(result['truncated'])",
+        "self.assertLessEqual(len(utf8(result['result'])), 200 * 1024)",
+        "self.assertNotIn('�', result['result'])"
+      ]
     },
     {
       "repo": "arbol-claude-driver",
-      "file": "tests/test_runtime.py",
-      "id": "tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status",
+      "file": "tests/mid/test_mid_runtime.py",
+      "id": "tests/mid/test_mid_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status",
       "name": "test_replacing_signin_preserves_failure_exit_status",
       "class": "CliLifecycleTests",
       "kind": "python",
@@ -749,8 +1200,19 @@
       "end_before": 558,
       "reason": "Scenario: replacing signin preserves failure exit status. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 581,
-      "file_sha256": "06d6cbb6d6c246b9d67bc47b48d2357d4958f522247900a0852daf23a88943f9"
+      "line": 525,
+      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "previous_id": "tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status",
+      "previous_file": "tests/test_runtime.py",
+      "previous_line": 581,
+      "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+      "support_file": "tests/test_runtime.py",
+      "description": "Replacing signin preserves failure exit status.",
+      "assertion_examples": [
+        "first.stdout",
+        "self.assertEqual(opened['step'], 'open_url')",
+        "self.assertEqual(second.returncode, 0, second_out)"
+      ]
     }
   ],
   "removed_low": [
@@ -770,5 +1232,14 @@
       "reason": "Mocks the runner and checks only the default/overridden path concatenated into its argv; it does not establish conformance.",
       "surviving_evidence": "Actual conformance runner/scenario tests and gate failure/empty-suite protection remain."
     }
-  ]
+  ],
+  "layout": {
+    "date": "2026-10-29",
+    "source_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
+    "top": "tests/top",
+    "mid": "tests/mid",
+    "mid_document": "MID_TIER.md",
+    "shared_support": "Original paths retain helpers and refusal entry points, with all inventoried case bodies moved.",
+    "source_mapping": "previous_id, previous_file and previous_line retain the pre-move address; no owner-store migration or ingest performed."
+  }
 }
