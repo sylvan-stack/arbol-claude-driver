@@ -1,5 +1,8 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Contract-2 retirement refuses before credentials, native startup or record mutation."""
+from typing import Any
+
+
 import json
 import os
 import subprocess
