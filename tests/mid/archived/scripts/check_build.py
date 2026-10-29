@@ -61,6 +61,7 @@ def verify(folder: Path, candidate: bool) -> dict[str, Any]:
 
 
 def unit(folder: Path) -> int:
+    raise ValueError('SYL-327 reduced the retained test selection. Full Build qualification requires an explicitly requested review of the qualification map; see TESTS.md.')
     sys.path.insert(0, str(folder))
     sys.path.insert(0, str(folder / "src"))
     os.chdir(folder)

@@ -38,3 +38,7 @@ PYTHONPATH=src:tests:tests/top python -m unittest test_top_runtime.StateTests.te
 For a Python method, use the same fixture setup as the top tier, put the mid folder on PYTHONPATH, and select `test_mid_<module>.Class.test_method`. Mycel's fixture-aware runner accepts `--tests tests/mid --select test_mid_<module>.Class.test_method`; store cases require explicit disposable-store settings. Archived scenarios and programs retain their original compatibility entry paths.
 
 Restoration under SYL-326 used static checks only. No tests, Builds, provider calls, Origin migrations or corpus ingest were performed. Original prerequisites and environment limits still apply.
+
+## Qualification after SYL-327
+
+The historical packaged unit gate refuses after this substantial pruning. A separately requested qualification task must review the reduced selection before restoring that gate. Individual top and mid selections remain governed by the policy above; their results cannot stand in for the former complete Build qualification.
