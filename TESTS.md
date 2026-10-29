@@ -41,4 +41,8 @@ Restoration under SYL-326 used static checks only. No tests, Builds, provider ca
 
 ## Qualification after SYL-327
 
-The historical packaged unit gate refuses after this substantial pruning. A separately requested qualification task must review the reduced selection before restoring that gate. Individual top and mid selections remain governed by the policy above; their results cannot stand in for the former complete Build qualification.
+The packaged unit gate no longer stands for the former complete Build qualification: since SYL-329 it runs the top tier only, as Builds below says. Individual top and mid selections remain governed by the policy above; their results cannot stand in for the former complete Build qualification.
+
+## Builds
+
+Since SYL-329 (29 October 2026) a Build runs the top tier only. Its `unit` check runs every case under `tests/top/` and fails when there is none. Its `contract` check runs no scenario, because the shared conformance scenarios are mid tier, and says so in the Build log. The `live` check, one real message through the installed vendor tool (BLD-0.5), is unchanged. The mid tier runs only when the owner asks for a mid-tier run.
