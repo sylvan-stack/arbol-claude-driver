@@ -35,3 +35,22 @@ class RetiredRoutes(_support.RetiredRoutes):
         self.assertEqual((self.retired / 'history.json').read_text(), 'historical conversation')
         self.assertFalse(self.sentinel.exists())
 # TEST-TIER-END tests/test_cutover.py::RetiredRoutes.test_incomplete_concurrent_creation_is_not_a_sign_in_to_recover
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_cutover.py::RetiredRoutes.test_gateway_defaults_and_settings_fail_before_native_start
+# Reason: Repeats retired gateway settings/selector refusal permutations already exercised by the retained real-process cutover/history-preservation case; no distinct state transition or side effect is asserted. Case reviewed: Gateway defaults and settings fail before native start.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_cutover.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_gateway_defaults_and_settings_fail_before_native_start(self) -> None:
+#         cases: list[dict[str, Any]] = [{'defaultSubscription': 'zai'}, {'toolPath': '/unused/claude-zai'},
+#                  {'subscriptions': {'zai': {}}}]
+#         for key in ('baseUrl', 'modelMap', 'toolEnvironment'):
+#             cases += [{key: 'SECRET-SENTINEL'}, {'subscriptions': {'anthropic': {'settings': {key: 'SECRET-SENTINEL'}}}}]
+#         for settings in cases:
+#             with self.subTest(settings=settings):
+#                 self.settings.write_text(json.dumps({**self.configuration, **settings}))
+#                 self.refuses('run', 'hello')
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END

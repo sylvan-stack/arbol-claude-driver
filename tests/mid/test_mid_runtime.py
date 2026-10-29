@@ -234,3 +234,366 @@ class CliLifecycleTests(_support.CliLifecycleTests):
                     first.kill()
                     await first.wait()
 # TEST-TIER-END tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status
+
+# LOW TIER — DO NOT ENABLE OR RECREATE
+# Historical examples only. Read before adding related tests; never execute.
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::CompatibilityTests.test_golden_chat_keys_utf16_paths_and_keychain_identity
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Golden chat keys utf16 paths and keychain identity.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_golden_chat_keys_utf16_paths_and_keychain_identity(self) -> None:
+#         vectors = loads((ROOT / 'tests/fixtures/migration-vectors.json').read_text())
+#         for case in vectors['chats']:
+#             self.assertEqual(digest(case['chat']), case['expected']['claude'])
+#         for case in vectors['folders']:
+#             self.assertEqual(encode_folder(case['folder']), case['expected'])
+#         self.assertEqual(keychain_service(Path('/example-home/Library/Application Support/Arbol/drivers/claude'), '/example-home'), vectors['keychain']['defaultService'])
+#         example = vectors['keychain']['customExample']
+#         self.assertEqual(keychain_service(Path(example['realPath'])), example['service'])
+#         with tempfile.TemporaryDirectory() as folder:
+#             real = Path(folder) / 'real'
+#             real.mkdir()
+#             alias = Path(folder) / 'alias'
+#             alias.symlink_to(real, target_is_directory=True)
+#             self.assertEqual(keychain_service(real), keychain_service(alias))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::CompatibilityTests.test_json_stringify_numbers_indices_controls_and_surrogates
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Json stringify numbers indices controls and surrogates.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_json_stringify_numbers_indices_controls_and_surrogates(self) -> None:
+#         self.assertFalse(number(10**400))
+#         self.assertEqual(compact(10**400), 'null')
+#         self.assertEqual(compact({'z': 1.0, '10': 1e-6, '2': 1e21, '01': -0.0}), '{"2":1e+21,"10":0.000001,"z":1,"01":0}')
+#         self.assertEqual(compact('\ud83d\ude00\ud83d\n\x00'), '"😀\\ud83d\\n\\u0000"')
+#         self.assertEqual(utf8('\ud83d'), b'\xef\xbf\xbd')
+#         for value in ('NaN', 'Infinity', '-Infinity', '{"n":NaN}'):
+#             with self.subTest(value=value), self.assertRaises(ValueError):
+#                 loads(value)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::CompatibilityTests.test_native_history_links_images_shell_and_error_results
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Native history links images shell and error results.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_native_history_links_images_shell_and_error_results(self) -> None:
+#         history: list[Record] = [
+#             {'type': 'message', 'role': 'user', 'text': 'hi', 'images': [{'mediaType': 'image/png', 'data': 'aGk='}]},
+#             {'type': 'tool_call', 'name': 'shell', 'input': {'command': 'pwd', 'ignored': True}, 'ok': False, 'result': {'output': 'failed', 'exitCode': 2}, 'error': 'reason'},
+#         ]
+#         rows = session_lines(history, 'conversation', '/folder', 2000)
+#         self.assertEqual(len(rows), 3)
+#         self.assertIsNone(rows[0]['parentUuid'])
+#         self.assertEqual(rows[1]['parentUuid'], rows[0]['uuid'])
+#         self.assertEqual(rows[2]['parentUuid'], rows[1]['uuid'])
+#         self.assertEqual(rows[0]['message']['content'][1]['source']['data'], 'aGk=')
+#         use = rows[1]['message']['content'][0]
+#         self.assertEqual(use['name'], 'Bash')
+#         self.assertEqual(use['input'], {'command': 'pwd'})
+#         self.assertEqual(rows[2]['message']['content'][0]['tool_use_id'], use['id'])
+#         self.assertEqual(result_text(history[1]), 'failed\nexit code: 2\nreason')
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::CompatibilityTests.test_failure_closed_codes_retryability_redaction_and_truncation
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Failure closed codes retryability redaction and truncation.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_failure_closed_codes_retryability_redaction_and_truncation(self) -> None:
+#         error = Failure('rate_limited', 'secret is rejected', {'detail': {'excerpt': '😀' * 400 + 'secret'}, 'retryAfterSeconds': 4}, ['secret'])
+#         self.assertTrue(error.result['retryable'])
+#         self.assertNotIn('secret', compact(error.result))
+#         self.assertLessEqual(len(utf8(error.result['detail']['excerpt'])), 1024)
+#         self.assertNotIn('retryAfterSeconds', Failure('vendor_error', 'bad', {'retryAfterSeconds': 3}).result)
+#         self.assertEqual(safe_failure(ValueError('private text'))['code'], 'internal')
+#         with self.assertRaises(ValueError):
+#             Failure('invented', 'bad')
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::CompatibilityTests.test_settings_unknown_values_withheld_and_environment_allowlist
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Settings unknown values withheld and environment allowlist.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_settings_unknown_values_withheld_and_environment_allowlist(self) -> None:
+#         invalid: list[Record] = [
+#             {'baseUrl': 'ftp://secret-sentinel'},
+#             {'baseUrl': 'https://user:secret-sentinel@example.invalid'},
+#             {'modelMap': {'haiku': 2}},
+#             {'modelMap': []},
+#             {'toolEnvironment': {'ANTHROPIC_AUTH_TOKEN': 'secret-sentinel'}},
+#             {'toolEnvironment': {'API_TIMEOUT_MS': 12}},
+#             {'baseUrl': 'http://[invalid'},
+#             {'baseUrl': 'http://example.invalid:bad'},
+#             {'baseUrl': 'http://example.invalid:65536'},
+#         ]
+#         for index, value in enumerate(invalid):
+#             with self.subTest(invalid=index), self.assertRaises(Failure) as caught:
+#                 family_settings('zai', value, 'settings.', [])
+#             self.assertEqual(caught.exception.result['code'], 'invalid_input')
+#             self.assertNotIn('secret-sentinel', compact(caught.exception.result))
+#         for base_url in ('http://127.0.0.1:8080/custom', 'https://example.invalid:8443/gateway?mode=test', 'http://[::1]:65535/route'):
+#             with self.subTest(valid=base_url):
+#                 value = {'baseUrl': base_url, 'modelMap': {'haiku': 'custom-small'}, 'toolEnvironment': {'API_TIMEOUT_MS': '456'}}
+#                 with self.assertRaises(Failure) as caught:
+#                     family_settings('zai', value, 'settings.', [])
+#                 self.assertIn('Pi', caught.exception.result['remedy'])
+#         with tempfile.TemporaryDirectory() as folder:
+#             file = Path(folder) / 'settings.json'
+#             file.write_text('{"subscriptions":{"zai":{"settings":{"extra":"secret-value"}}}}')
+#             with self.assertRaises(Failure):
+#                 read_settings(file)
+#             for text, field in [('{"unknown":"secret-value"}', 'unknown'), ('{"defaultSubscripton":"secret-value"}', 'defaultSubscripton'),
+#                                 ('{"subscriptions":{"anthropic":{"defaultModle":"secret-value"}}}', 'subscriptions.anthropic.defaultModle'),
+#                                 ('{"subscriptions":{"anthropic":{"secret":{"from":"keychain","account":"secret-value"}}}}', 'subscriptions.anthropic.secret.account')]:
+#                 file.write_text(text)
+#                 with self.subTest(field=field), self.assertRaises(Failure) as caught:
+#                     read_settings(file)
+#                 self.assertEqual(caught.exception.result['code'], 'invalid_input')
+#                 self.assertIn(f'{file}: unknown field {field}.', compact(caught.exception.result))
+#                 self.assertNotIn('secret-value', compact(caught.exception.result))
+#         unknown_names: list[tuple[str, dict[str, Any], str]] = [('zai', {'extra': 'secret-value'}, 'extra'), ('zai', {'modelMap': {'tiny': 'secret-value'}}, 'modelMap.tiny'),
+#                                                                  ('anthropic', {'baseUrl': 'secret-value'}, 'baseUrl')]
+#         for family, given, field in unknown_names:
+#             with self.subTest(family=family, field=field), self.assertRaises(Failure) as caught:
+#                 family_settings(family, given, 'settings.', [])
+#             self.assertEqual(caught.exception.result['code'], 'invalid_input')
+#             self.assertIn('Pi', caught.exception.result['remedy'])
+#             self.assertNotIn('secret-value', compact(caught.exception.result))
+#         env = clean_environment({'HOME': '/wrong', 'PATH': '/bin', 'LANG': 'C', 'ANTHROPIC_AUTH_TOKEN': 'secret', 'AWS_SECRET_ACCESS_KEY': 'secret', 'NODE_OPTIONS': 'bad'}, '/account', '/config')
+#         self.assertEqual(env['HOME'], '/account')
+#         self.assertEqual(env['CLAUDE_CONFIG_DIR'], '/config')
+#         self.assertNotIn('NODE_OPTIONS', env)
+#         self.assertNotIn('ANTHROPIC_AUTH_TOKEN', env)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::CompatibilityTests.test_key_validation_and_quota_math_resets_and_order
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Key validation and quota math resets and order.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_key_validation_and_quota_math_resets_and_order(self) -> None:
+#         validate_key('ASCII-key!')
+#         with self.assertRaises(Failure) as caught:
+#             validate_key('bad\n😀')
+#         self.assertIn('U+000A', str(caught.exception))
+#         current = 1000
+#         report = normalize_quota({'success': True, 'data': {'limits': [
+#             {'type': 'CREDIT_LIMIT', 'unit': 6, 'number': 1, 'percentage': 40},
+#             {'type': 'TOKENS_LIMIT', 'unit': 3, 'number': 5, 'percentage': 99, 'usage': 100, 'remaining': 75, 'nextResetTime': (current + 400 * 60) * 1000},
+#             {'type': 'TIME_LIMIT', 'percentage': 7},
+#         ]}}, current)
+#         self.assertEqual([window['usedPercent'] for window in report['windows']], [25, 40, 7])
+#         self.assertEqual(report['windows'][0]['windowMinutes'], 300)
+#         self.assertNotIn('resetsAt', report['windows'][0])
+#         # DRV-1.27: a token, a credit and the MCP call allowance say what they count.
+#         self.assertEqual([(window['label'], window['resource']) for window in report['windows']], [('5-hour window', 'tokens'), ('Weekly window', 'credits'), ('MCP', 'calls')])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::CompatibilityTests.test_limit_report_windows_count_tokens_and_map_nothing_else
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Limit report windows count tokens and map nothing else.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_limit_report_windows_count_tokens_and_map_nothing_else(self) -> None:
+#         info = {'status': 'allowed', 'rateLimitType': 'five_hour', 'isUsingOverage': False, 'unifiedWindows': {
+#             'five_hour': {'utilization': .63, 'resetsAt': 1793062800}, 'seven_day': {'utilization': .15, 'resetsAt': 1793592000},
+#             'seven_day_opus': {'utilization': .5, 'resetsAt': 1793592000}}}
+#         report = limit_report({'type': 'rate_limit_event', 'rate_limit_info': info})
+#         assert report is not None
+#         self.assertEqual([(window['kind'], window['label'], window['resource']) for window in report['windows']], [('session', 'Five hours', 'tokens'), ('weekly', 'Seven days', 'tokens')])
+#         self.assertEqual([window['usedPercent'] for window in report['windows']], [63, 15])
+#         self.assertEqual(report['extra'], {'status': 'allowed', 'rateLimitType': 'five_hour', 'isUsingOverage': False})
+#         self.assertIsNone(limit_report({'type': 'rate_limit_event', 'rate_limit_info': {'status': 'allowed'}}))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::CompatibilityTests.test_command_frame_rejects_unknowns_and_preserves_literal_prompt
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Command frame rejects unknowns and preserves literal prompt.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     def test_command_frame_rejects_unknowns_and_preserves_literal_prompt(self) -> None:
+#         parsed = parse_arguments(['--state-dir', '/state', 'run', '--tools=none', '--label', 'x=a=b', '--', '--literal'])
+#         self.assertEqual(parsed.positionals, ['--literal'])
+#         self.assertEqual(parsed.options['label'], ['x=a=b'])
+#         for args in (['wat'], ['info', '--bad'], ['subscriptions', 'create', '--force'], ['run', '--tools']):
+#             with self.subTest(args=args), self.assertRaises(Failure):
+#                 parse_arguments(args)
+#         self.assertTrue(supported_version('2.1.289'))
+#         self.assertFalse(supported_version('2.1.288'))
+#         self.assertFalse(supported_version('2.1.289-beta'))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::StateTests.test_process_identity_and_lock_contention
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Process identity and lock contention.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     async def test_process_identity_and_lock_contention(self) -> None:
+#         owner = await process_owner(os.getpid())
+#         self.assertIsNotNone(owner)
+#         assert owner
+#         self.assertTrue(await owner_alive(owner))
+#         with self.assertRaises(Failure):
+#             parse_owner({'pid': True, 'startedAt': now()})
+#         order: list[str] = []
+#         async def contender() -> None:
+#             async with self.state.lock('anthropic'):
+#                 order.append('second')
+#         async with self.state.lock('anthropic'):
+#             task = asyncio.create_task(contender())
+#             await asyncio.sleep(.03)
+#             self.assertEqual(order, [])
+#             order.append('first')
+#         await task
+#         self.assertEqual(order, ['first', 'second'])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::StateTests.test_duplicate_run_identifiers_and_safe_paths
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Duplicate run identifiers and safe paths.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     async def test_duplicate_run_identifiers_and_safe_paths(self) -> None:
+#         runs = Runs(self.state)
+#         request = {'runId': 'one', 'subscriptionId': 'anthropic'}
+#         await runs.reserve(request, 'conversation')
+#         with self.assertRaises(Failure) as caught:
+#             await runs.reserve(request, 'other')
+#         self.assertEqual(caught.exception.result['code'], 'in_use')
+#         for identifier in ('../bad', '/absolute', '.', 'x/y'):
+#             with self.subTest(identifier=identifier), self.assertRaises(Failure):
+#                 runs.path(identifier)
+#         self.assertNotEqual(Chats(self.state).path('anthropic', digest('chat')), Chats(self.state).path('zai', digest('chat')))
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::StateTests.test_failed_live_check_reports_observed_cost_and_one_attempt
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Failed live check reports observed cost and one attempt.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     async def test_failed_live_check_reports_observed_cost_and_one_attempt(self) -> None:
+#         subscriptions = Subscriptions(self.state, {}, [], self.root / '.arbol/settings.json')
+#         await subscriptions.create('anthropic', 'Test', 'test-anthropic')
+#         authenticate = Authentication(subscriptions, {'HOME': str(self.root)}, asyncio.Event())
+#         await authenticate.save('test-anthropic', lambda value: {**value, 'state': 'signed_in'})
+#         async def fixture_spawn(*args: Any, **kwargs: Any) -> asyncio.subprocess.Process:
+#             code = 'print(\'{"type":"started","continuity":"fresh"}\');print(\'{"type":"usage","usage":{"inputTokens":3,"outputTokens":2,"costUsd":0.01}}\');print("malformed")'
+#             return await asyncio.create_subprocess_exec(sys.executable, '-c', code, start_new_session=True, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+#         with patch('arbol_claude_driver.dev.inspect_tool', AsyncMock(return_value={'supported': True, 'path': sys.executable, 'version': '2.1.289'})), patch('arbol_claude_driver.dev.spawn', fixture_spawn):
+#             status, report = await live_check(True, subscriptions, {'HOME': str(self.root)}, asyncio.Event())
+#         self.assertEqual(status, 1)
+#         self.assertEqual(report['inferenceRequests'], 1)
+#         self.assertEqual(report['turnsAttempted'], 1)
+#         self.assertEqual(report['tokenUsage'], {'inputTokens': 3, 'outputTokens': 2, 'costUsd': .01})
+#         self.assertEqual(report['checks'][0]['outcome'], 'failed')
+#         self.assertEqual(report['checks'][0]['tokenUsage'], report['tokenUsage'])
+#         self.assertEqual(len(list((self.state.directory / 'research').glob('build-check-*.json'))), 1)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::StateTests.test_live_check_signed_in_gate_precedes_tool_and_prompt
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Live check signed in gate precedes tool and prompt.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     async def test_live_check_signed_in_gate_precedes_tool_and_prompt(self) -> None:
+#         subscriptions = Subscriptions(self.state, {}, [], self.root / '.arbol/settings.json')
+#         await subscriptions.create('anthropic', 'Test', 'test-anthropic')
+#         with patch('arbol_claude_driver.dev.inspect_tool', AsyncMock()) as inspect, patch('arbol_claude_driver.dev.spawn', AsyncMock()) as spawn:
+#             with self.assertRaises(Failure) as caught:
+#                 await live_check(True, subscriptions, {}, asyncio.Event())
+#         self.assertEqual(caught.exception.result['code'], 'not_signed_in')
+#         inspect.assert_not_called()
+#         spawn.assert_not_called()
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::TransportTests.test_group_cleanup_refuses_a_reused_leader
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Group cleanup refuses a reused leader.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     async def test_group_cleanup_refuses_a_reused_leader(self) -> None:
+#         owner: Record = {'pid': 123, 'startedAt': now(1)}
+#         self.assertEqual(remaining_groups([owner], [{'pid': 123, 'group': 456, 'zombie': False, 'startedAt': now(1)}]), [])
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::RequestTests.test_typed_request_cli_replacement_labels_and_literal_prompt
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Typed request cli replacement labels and literal prompt.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     async def test_typed_request_cli_replacement_labels_and_literal_prompt(self) -> None:
+#         value = {'runId': 'caller', 'subscriptionId': 'anthropic', 'history': [], 'tools': 'none', 'labels': {'x': 'file'}, 'input': {'role': 'user', 'text': 'file'}, 'additionalDirectories': ['/']}
+#         parsed = await self.read(value, ['--tools', 'all', '--cwd', '/', '--add-dir', '/tmp', '--label', 'x=cli', '--', 'literal'])
+#         self.assertIsInstance(parsed, ValidatedRequest)
+#         self.assertEqual(parsed.tools, 'all')
+#         self.assertEqual(parsed.record()['additionalDirectories'], ['/tmp'])
+#         self.assertEqual(parsed.record()['input']['text'], 'literal')
+#         self.assertEqual(parsed.record()['labels'], {'x': 'cli'})
+#         args = run_arguments(parsed.record(), 'conversation', True)
+#         self.assertIn('--permission-prompt-tool', args)
+#         self.assertIn('bypassPermissions', args)
+#         self.assertIn('--system-prompt-snapshot', args)
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::RequestTests.test_malformed_nested_json_values_are_invalid_input
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Malformed nested json values are invalid input.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     async def test_malformed_nested_json_values_are_invalid_input(self) -> None:
+#         base: Record = {'history': [], 'tools': 'none', 'input': {'role': 'user', 'text': 'hi'}}
+#         changes: list[Record] = [{'tools': {}}, {'runId': []}, {'history': [{'type': 'message', 'role': {}, 'text': 'hi'}]}, {'input': {'role': 'user', 'text': 'hi', 'images': [{'mediaType': {}, 'data': 'aGk='}]}}, {'limits': {'idleSeconds': True}}, {'history': [{'type': 'tool_call', 'name': 'shell', 'input': {}, 'ok': True}]}, {'input': {'role': 'user', 'text': 'hi', 'images': [{'mediaType': 'image/png', 'data': 'bad'}]}}]
+#         for change in changes:
+#             with self.subTest(change=change), self.assertRaises(Failure) as caught:
+#                 await self.read({**base, **change})
+#             self.assertEqual(caught.exception.result['code'], 'invalid_input')
+#         raw = compact({**base, 'limits': {'idleSeconds': 'HUGE'}}).replace('"HUGE"', str(10**400))
+#         async def first_line() -> bytes:
+#             return (raw + '\n').encode()
+#         with self.assertRaises(Failure) as caught:
+#             await read_request(parse_arguments(['run', '--request', '-']), {}, first_line, lambda *_: None)
+#         self.assertEqual(caught.exception.result['code'], 'invalid_input')
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
+
+# LOW-TIER-BEGIN: tests/mid/test_mid_runtime.py::ProtocolTests.test_utf8_tool_result_cut_and_single_final_cleanup
+# Reason: The body rechecks local field/format/validation mappings, a narrow simulated predicate, or behavior represented by retained migration, process and protocol lifecycle checks. No additional execution-dependent failure mechanism meets the raised bar. The retained inventory states the distinct boundaries; removed cases do not imply those boundaries were executed here. Case reviewed: Utf8 tool result cut and single final cleanup.
+# Source: arbol-claude-driver@333e67a57990610b8a97afe433d7bc61273ebc7a:tests/mid/test_mid_runtime.py
+# Historical fixtures and class context are available at the source revision; no active dependencies restored.
+# LOW-TIER-SOURCE-BEGIN
+#     async def test_utf8_tool_result_cut_and_single_final_cleanup(self) -> None:
+#         result = truncate_result('😀' * 60000)
+#         self.assertTrue(result['truncated'])
+#         self.assertLessEqual(len(utf8(result['result'])), 200 * 1024)
+#         self.assertNotIn('\ufffd', result['result'])
+#         self.events.calls['open'] = {'name': 'shell'}
+#         self.events.asks['ask'] = None
+#         self.events.usage = {'inputTokens': 2}
+#         await self.events.finish(None, True)
+#         count = len(self.output.records)
+#         await self.events.finish(None, True)
+#         self.assertEqual(len(self.output.records), count)
+#         self.assertEqual([row['type'] for row in self.output.records], ['ask_closed', 'tool_finished', 'finished'])
+#         self.assertEqual(self.output.records[-1]['outcome'], 'cancelled')
+#         self.assertEqual(self.output.records[-1]['usage'], {'inputTokens': 2})
+# LOW-TIER-SOURCE-END
+# LOW-TIER-END
