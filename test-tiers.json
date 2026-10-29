@@ -6,14 +6,21 @@
   "counting": "Static definitions and separately labelled programs/scenario functions; not runtime-discovered cases.",
   "mid_review": "Provisional execution classification unless marked individually reviewed; not a completed quality endorsement.",
   "counts": {
-    "python_active": 2,
-    "python_commented": 38,
-    "programs_active": 0,
+    "python_active": 40,
+    "python_commented": 0,
+    "programs_active": 1,
     "node_cases_commented": 0,
     "scenario_functions_commented": 0,
-    "programs_commented": 1,
-    "entrypoints_guarded": 5,
-    "low_removed_previously": 2
+    "programs_commented": 0,
+    "entrypoints_guarded": 0,
+    "low_removed_previously": 2,
+    "mid_available": 44,
+    "mid_by_kind": {
+      "entrypoint": 5,
+      "program": 1,
+      "python": 38
+    },
+    "top_available": 2
   },
   "tests": [
     {
@@ -24,13 +31,13 @@
       "class": "",
       "kind": "entrypoint",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 61,
       "end_before": 68,
-      "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
+      "reason": "Broad qualification or diagnostic entry point. It exercises broad behavior and requires a separately requested testing task; restoration is not qualification evidence.",
       "review": "execution-default",
-      "line": 4,
-      "file_sha256": "753a79248d32b41ce33c564a9f51ce720b15c439c1c46627c4deba84de1aadd7",
+      "line": 63,
+      "file_sha256": "82b5cdc142759d154353c4afe7b24dd68c0dca72c90df7c9f4e8586657216b09",
       "previous_id": "scripts/check_build.py::unit",
       "previous_file": "scripts/check_build.py",
       "previous_line": 58,
@@ -38,7 +45,10 @@
       "support_file": "scripts/check_build.py",
       "archive_block_id": "scripts/check_build.py::unit",
       "description": "Coordinates the packaged unit-test gate for a candidate Build.",
-      "assertion_examples": []
+      "assertion_examples": [],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim."
     },
     {
       "repo": "arbol-claude-driver",
@@ -48,13 +58,13 @@
       "class": "",
       "kind": "entrypoint",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 71,
       "end_before": 78,
-      "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
+      "reason": "Broad qualification or diagnostic entry point. It exercises broad behavior and requires a separately requested testing task; restoration is not qualification evidence.",
       "review": "execution-default",
-      "line": 15,
-      "file_sha256": "753a79248d32b41ce33c564a9f51ce720b15c439c1c46627c4deba84de1aadd7",
+      "line": 73,
+      "file_sha256": "82b5cdc142759d154353c4afe7b24dd68c0dca72c90df7c9f4e8586657216b09",
       "previous_id": "scripts/check_build.py::contract",
       "previous_file": "scripts/check_build.py",
       "previous_line": 72,
@@ -62,7 +72,10 @@
       "support_file": "scripts/check_build.py",
       "archive_block_id": "scripts/check_build.py::contract",
       "description": "Coordinates the shared compatibility and conformance gate for a candidate Build.",
-      "assertion_examples": []
+      "assertion_examples": [],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim."
     },
     {
       "repo": "arbol-claude-driver",
@@ -72,13 +85,13 @@
       "class": "",
       "kind": "entrypoint",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 81,
       "end_before": 88,
-      "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
+      "reason": "Broad qualification or diagnostic entry point. It exercises broad behavior and requires a separately requested testing task; restoration is not qualification evidence.",
       "review": "execution-default",
-      "line": 26,
-      "file_sha256": "753a79248d32b41ce33c564a9f51ce720b15c439c1c46627c4deba84de1aadd7",
+      "line": 83,
+      "file_sha256": "82b5cdc142759d154353c4afe7b24dd68c0dca72c90df7c9f4e8586657216b09",
       "previous_id": "scripts/check_build.py::live",
       "previous_file": "scripts/check_build.py",
       "previous_line": 87,
@@ -86,7 +99,10 @@
       "support_file": "scripts/check_build.py",
       "archive_block_id": "scripts/check_build.py::live",
       "description": "Exercises the live provider boundary of a candidate Build.",
-      "assertion_examples": []
+      "assertion_examples": [],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim."
     },
     {
       "repo": "arbol-claude-driver",
@@ -96,13 +112,13 @@
       "class": "",
       "kind": "program",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 1,
       "end_before": 157,
       "reason": "Standalone browser, native, installation or qualification program. Its combined checks need a dedicated testing task; the whole program has no individually justified top-tier selection.",
       "review": "program",
-      "line": 4,
-      "file_sha256": "688f95e36c0001e7d7e38dec8e88bdf02081c418145ae751c634394461cdacb5",
+      "line": 1,
+      "file_sha256": "e3a2cac03838a112af34ea525c4519950b753c259d44c02639198584a242971a",
       "previous_id": "scripts/verify_build.py",
       "previous_file": "scripts/verify_build.py",
       "previous_line": 1,
@@ -110,7 +126,10 @@
       "support_file": "scripts/verify_build.py",
       "archive_block_id": "scripts/verify_build.py",
       "description": "Standalone verify build check program; its combined scenarios are retained together.",
-      "assertion_examples": []
+      "assertion_examples": [],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Standalone browser, native, installation or qualification program. Its combined checks need a dedicated testing task; the whole program has no individually justified top-tier selection."
     },
     {
       "repo": "arbol-claude-driver",
@@ -120,13 +139,13 @@
       "class": "",
       "kind": "entrypoint",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 40,
       "end_before": 155,
-      "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
+      "reason": "Broad qualification or diagnostic entry point. It exercises broad behavior and requires a separately requested testing task; restoration is not qualification evidence.",
       "review": "execution-default",
-      "line": 4,
-      "file_sha256": "d4ca320fce876ebc9beee7fddf59310c29d10a8050700b53ff6074bdee1b4ca1",
+      "line": 43,
+      "file_sha256": "1cf0560ab4118b9f72a5f70b6d97bf9b5918486b1d1fc3ce3ce9696cd000c6ec",
       "previous_id": "src/arbol_claude_driver/dev.py::probe",
       "previous_file": "src/arbol_claude_driver/dev.py",
       "previous_line": 27,
@@ -137,7 +156,10 @@
       "assertion_examples": [
         "child.stdin and child.stdout and child.stderr",
         "child.stdout and child.stderr"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim."
     },
     {
       "repo": "arbol-claude-driver",
@@ -147,13 +169,13 @@
       "class": "",
       "kind": "entrypoint",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 176,
       "end_before": 261,
-      "reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim.",
+      "reason": "Broad qualification or diagnostic entry point. It exercises broad behavior and requires a separately requested testing task; restoration is not qualification evidence.",
       "review": "execution-default",
-      "line": 123,
-      "file_sha256": "d4ca320fce876ebc9beee7fddf59310c29d10a8050700b53ff6074bdee1b4ca1",
+      "line": 179,
+      "file_sha256": "1cf0560ab4118b9f72a5f70b6d97bf9b5918486b1d1fc3ce3ce9696cd000c6ec",
       "previous_id": "src/arbol_claude_driver/dev.py::live_check",
       "previous_file": "src/arbol_claude_driver/dev.py",
       "previous_line": 167,
@@ -163,7 +185,10 @@
       "description": "Exercises the native or provider-facing live workflow and its protocol result.",
       "assertion_examples": [
         "child.stdin and child.stdout and child.stderr"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Broad qualification or diagnostic entry point. Its original implementation is commented and the callable refuses, so disabled checks cannot yield a passing release claim."
     },
     {
       "repo": "arbol-claude-driver",
@@ -173,13 +198,13 @@
       "class": "RetiredRoutes",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 52,
       "end_before": 67,
-      "reason": "Scenario: every retired selector refuses and preserves history. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: every retired selector refuses and preserves history. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 19,
-      "file_sha256": "fab5260c24d90b258106735097667da8ca592912976fbd324952441949f60ba9",
+      "line": 21,
+      "file_sha256": "c6a50f670285c65d9db8f12bdcb893121894f16d4f56fb1ce10e6acc4a55fa4c",
       "previous_id": "tests/test_cutover.py::RetiredRoutes.test_every_retired_selector_refuses_and_preserves_history",
       "previous_file": "tests/test_cutover.py",
       "previous_line": 51,
@@ -190,7 +215,11 @@
         "self.assertEqual(json.loads((self.retired / 'record.json').read_text()), self.record)",
         "self.assertEqual((self.retired / 'history.json').read_text(), 'historical conversation')",
         "self.assertEqual([item['id'] for item in listed], ['anthropic'])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: every retired selector refuses and preserves history. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_cutover.RetiredRoutes.test_every_retired_selector_refuses_and_preserves_history"
     },
     {
       "repo": "arbol-claude-driver",
@@ -200,20 +229,24 @@
       "class": "RetiredRoutes",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 69,
       "end_before": 77,
-      "reason": "Scenario: gateway defaults and settings fail before native start. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: gateway defaults and settings fail before native start. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 38,
-      "file_sha256": "fab5260c24d90b258106735097667da8ca592912976fbd324952441949f60ba9",
+      "line": 40,
+      "file_sha256": "c6a50f670285c65d9db8f12bdcb893121894f16d4f56fb1ce10e6acc4a55fa4c",
       "previous_id": "tests/test_cutover.py::RetiredRoutes.test_gateway_defaults_and_settings_fail_before_native_start",
       "previous_file": "tests/test_cutover.py",
       "previous_line": 70,
       "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
       "support_file": "tests/test_cutover.py",
       "description": "Gateway defaults and settings fail before native start.",
-      "assertion_examples": []
+      "assertion_examples": [],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: gateway defaults and settings fail before native start. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_cutover.RetiredRoutes.test_gateway_defaults_and_settings_fail_before_native_start"
     },
     {
       "repo": "arbol-claude-driver",
@@ -223,13 +256,13 @@
       "class": "RetiredRoutes",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 79,
       "end_before": 85,
-      "reason": "Scenario: incomplete concurrent creation is not a sign in to recover. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: incomplete concurrent creation is not a sign in to recover. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 50,
-      "file_sha256": "fab5260c24d90b258106735097667da8ca592912976fbd324952441949f60ba9",
+      "line": 52,
+      "file_sha256": "c6a50f670285c65d9db8f12bdcb893121894f16d4f56fb1ce10e6acc4a55fa4c",
       "previous_id": "tests/test_cutover.py::RetiredRoutes.test_incomplete_concurrent_creation_is_not_a_sign_in_to_recover",
       "previous_file": "tests/test_cutover.py",
       "previous_line": 82,
@@ -240,7 +273,11 @@
         "self.assertEqual(result.returncode, 0, result.stdout + result.stderr)",
         "self.assertEqual(json.loads(result.stdout)['family'], 'anthropic')",
         "self.assertEqual((self.retired / 'history.json').read_text(), 'historical conversation')"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: incomplete concurrent creation is not a sign in to recover. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_cutover.RetiredRoutes.test_incomplete_concurrent_creation_is_not_a_sign_in_to_recover"
     },
     {
       "repo": "arbol-claude-driver",
@@ -250,13 +287,13 @@
       "class": "PackagingTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 22,
       "end_before": 30,
-      "reason": "Scenario: corrupted cached distribution is refused without a download. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: corrupted cached distribution is refused without a download. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 14,
-      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "line": 24,
+      "file_sha256": "704bf088b842abf00104eca674ac5d19ed5d1a45485a07ce247334aee4d7d68f",
       "previous_id": "tests/test_packaging.py::PackagingTests.test_corrupted_cached_distribution_is_refused_without_a_download",
       "previous_file": "tests/test_packaging.py",
       "previous_line": 14,
@@ -266,7 +303,11 @@
       "assertion_examples": [
         "download.assert_not_called()",
         "self.assertRaisesRegex(ValueError, 'wrong SHA-256')"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: corrupted cached distribution is refused without a download. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_packaging.PackagingTests.test_corrupted_cached_distribution_is_refused_without_a_download"
     },
     {
       "repo": "arbol-claude-driver",
@@ -276,13 +317,13 @@
       "class": "PackagingTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 32,
       "end_before": 38,
-      "reason": "Scenario: archive pin rejects nonhex digests and untrusted sources. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: archive pin rejects nonhex digests and untrusted sources. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 26,
-      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "line": 36,
+      "file_sha256": "704bf088b842abf00104eca674ac5d19ed5d1a45485a07ce247334aee4d7d68f",
       "previous_id": "tests/test_packaging.py::PackagingTests.test_archive_pin_rejects_nonhex_digests_and_untrusted_sources",
       "previous_file": "tests/test_packaging.py",
       "previous_line": 26,
@@ -292,7 +333,11 @@
       "assertion_examples": [
         "download.assert_not_called()",
         "self.assertRaisesRegex(ValueError, 'pinned URL and SHA-256')"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: archive pin rejects nonhex digests and untrusted sources. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_packaging.PackagingTests.test_archive_pin_rejects_nonhex_digests_and_untrusted_sources"
     },
     {
       "repo": "arbol-claude-driver",
@@ -302,13 +347,13 @@
       "class": "PackagingTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 41,
       "end_before": 45,
-      "reason": "Scenario: candidate cannot overwrite a numbered build. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: candidate cannot overwrite a numbered build. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 36,
-      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "line": 46,
+      "file_sha256": "704bf088b842abf00104eca674ac5d19ed5d1a45485a07ce247334aee4d7d68f",
       "previous_id": "tests/test_packaging.py::PackagingTests.test_candidate_cannot_overwrite_a_numbered_build",
       "previous_file": "tests/test_packaging.py",
       "previous_line": 37,
@@ -317,7 +362,11 @@
       "description": "Candidate cannot overwrite a numbered build.",
       "assertion_examples": [
         "self.assertRaisesRegex(ValueError, 'cannot replace a numbered Build')"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: candidate cannot overwrite a numbered build. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_packaging.PackagingTests.test_candidate_cannot_overwrite_a_numbered_build"
     },
     {
       "repo": "arbol-claude-driver",
@@ -327,13 +376,13 @@
       "class": "PackagingTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 47,
       "end_before": 60,
-      "reason": "Scenario: build record requires matching number entry and version. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: build record requires matching number entry and version. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 44,
-      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "line": 54,
+      "file_sha256": "704bf088b842abf00104eca674ac5d19ed5d1a45485a07ce247334aee4d7d68f",
       "previous_id": "tests/test_packaging.py::PackagingTests.test_build_record_requires_matching_number_entry_and_version",
       "previous_file": "tests/test_packaging.py",
       "previous_line": 45,
@@ -343,7 +392,11 @@
       "assertion_examples": [
         "self.assertRaisesRegex(ValueError, 'match this component, number and package version')",
         "self.assertRaisesRegex(ValueError, 'executable entry')"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: build record requires matching number entry and version. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_packaging.PackagingTests.test_build_record_requires_matching_number_entry_and_version"
     },
     {
       "repo": "arbol-claude-driver",
@@ -353,13 +406,13 @@
       "class": "PackagingTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 62,
       "end_before": 75,
-      "reason": "Scenario: live gate uses the test state directory. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: live gate uses the test state directory. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 61,
-      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "line": 71,
+      "file_sha256": "704bf088b842abf00104eca674ac5d19ed5d1a45485a07ce247334aee4d7d68f",
       "previous_id": "tests/test_packaging.py::PackagingTests.test_live_gate_uses_the_test_state_directory",
       "previous_file": "tests/test_packaging.py",
       "previous_line": 62,
@@ -370,7 +423,11 @@
         "self.assertEqual(execute.call_args.args[0][1:], ['dev', 'build-check', '--state-dir', str(home / 'Library/Application Support/Arbol/drivers/arbol-claude-driver')])",
         "self.assertEqual(execute.call_args.args[0][-1], '/tmp/other state')",
         "self.assertEqual(check_build.live(Path('/tmp/candidate')), 0)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: live gate uses the test state directory. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_packaging.PackagingTests.test_live_gate_uses_the_test_state_directory"
     },
     {
       "repo": "arbol-claude-driver",
@@ -380,13 +437,13 @@
       "class": "PackagingTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 78,
       "end_before": 87,
-      "reason": "Scenario: unit gate refuses an empty suite. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: unit gate refuses an empty suite. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 78,
-      "file_sha256": "586fdd7bc7266751076cafcd40611dbcc7527d88001334de29e5065e7d688771",
+      "line": 88,
+      "file_sha256": "704bf088b842abf00104eca674ac5d19ed5d1a45485a07ce247334aee4d7d68f",
       "previous_id": "tests/test_packaging.py::PackagingTests.test_unit_gate_refuses_an_empty_suite",
       "previous_file": "tests/test_packaging.py",
       "previous_line": 80,
@@ -395,7 +452,11 @@
       "description": "Unit gate refuses an empty suite.",
       "assertion_examples": [
         "self.assertRaisesRegex(ValueError, 'no tests')"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: unit gate refuses an empty suite. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_packaging.PackagingTests.test_unit_gate_refuses_an_empty_suite"
     },
     {
       "repo": "arbol-claude-driver",
@@ -405,13 +466,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 34,
       "end_before": 47,
-      "reason": "Scenario: golden histories and every incremental snapshot. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: golden histories and every incremental snapshot. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 42,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 80,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_golden_histories_and_every_incremental_snapshot",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 27,
@@ -422,7 +483,11 @@
         "self.assertEqual(value.snapshot(), {key: case['canonical'][key] for key in ('messages', 'digest')})",
         "self.assertEqual(snapshots, expected['snapshots'])",
         "self.assertNotEqual(value.snapshot()['digest'], case['expected']['claude']['digest'])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: golden histories and every incremental snapshot. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_golden_histories_and_every_incremental_snapshot"
     },
     {
       "repo": "arbol-claude-driver",
@@ -432,13 +497,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 49,
       "end_before": 63,
-      "reason": "Scenario: golden chat keys utf16 paths and keychain identity. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: golden chat keys utf16 paths and keychain identity. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 59,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 97,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_golden_chat_keys_utf16_paths_and_keychain_identity",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 44,
@@ -449,7 +514,11 @@
         "self.assertEqual(keychain_service(Path('/example-home/Library/Application Support/Arbol/drivers/claude'), '/example-home'), vectors['keychain']['defaultService'])",
         "self.assertEqual(keychain_service(Path(example['realPath'])), example['service'])",
         "self.assertEqual(digest(case['chat']), case['expected']['claude'])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: golden chat keys utf16 paths and keychain identity. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_golden_chat_keys_utf16_paths_and_keychain_identity"
     },
     {
       "repo": "arbol-claude-driver",
@@ -459,13 +528,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 65,
       "end_before": 73,
-      "reason": "Scenario: json stringify numbers indices controls and surrogates. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: json stringify numbers indices controls and surrogates. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 77,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 115,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_json_stringify_numbers_indices_controls_and_surrogates",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 62,
@@ -476,7 +545,11 @@
         "self.assertFalse(number(10 ** 400))",
         "self.assertEqual(compact(10 ** 400), 'null')",
         "self.assertEqual(compact({'z': 1.0, '10': 1e-06, '2': 1e+21, '01': -0.0}), '{\"2\":1e+21,\"10\":0.000001,\"z\":1,\"01\":0}')"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: json stringify numbers indices controls and surrogates. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_json_stringify_numbers_indices_controls_and_surrogates"
     },
     {
       "repo": "arbol-claude-driver",
@@ -486,13 +559,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 75,
       "end_before": 79,
-      "reason": "Scenario: independent node24 json golden vectors. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: independent node24 json golden vectors. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 89,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 127,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_independent_node24_json_golden_vectors",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 74,
@@ -501,7 +574,11 @@
       "description": "Independent node24 json golden vectors.",
       "assertion_examples": [
         "self.assertEqual(compact(loads(case['inputJson'])), case['expected'])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: independent node24 json golden vectors. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_independent_node24_json_golden_vectors"
     },
     {
       "repo": "arbol-claude-driver",
@@ -511,13 +588,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 81,
       "end_before": 96,
-      "reason": "Scenario: native history links images shell and error results. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: native history links images shell and error results. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 97,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 135,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_native_history_links_images_shell_and_error_results",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 82,
@@ -528,7 +605,11 @@
         "self.assertEqual(len(rows), 3)",
         "self.assertIsNone(rows[0]['parentUuid'])",
         "self.assertEqual(rows[1]['parentUuid'], rows[0]['uuid'])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: native history links images shell and error results. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_native_history_links_images_shell_and_error_results"
     },
     {
       "repo": "arbol-claude-driver",
@@ -538,13 +619,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 98,
       "end_before": 106,
-      "reason": "Scenario: failure closed codes retryability redaction and truncation. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: failure closed codes retryability redaction and truncation. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 116,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 154,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_failure_closed_codes_retryability_redaction_and_truncation",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 101,
@@ -555,7 +636,11 @@
         "self.assertTrue(error.result['retryable'])",
         "self.assertNotIn('secret', compact(error.result))",
         "self.assertLessEqual(len(utf8(error.result['detail']['excerpt'])), 1024)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: failure closed codes retryability redaction and truncation. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_failure_closed_codes_retryability_redaction_and_truncation"
     },
     {
       "repo": "arbol-claude-driver",
@@ -565,13 +650,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 108,
       "end_before": 157,
-      "reason": "Scenario: settings unknown values withheld and environment allowlist. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: settings unknown values withheld and environment allowlist. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 128,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 166,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_settings_unknown_values_withheld_and_environment_allowlist",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 113,
@@ -582,7 +667,11 @@
         "self.assertEqual(env['HOME'], '/account')",
         "self.assertEqual(env['CLAUDE_CONFIG_DIR'], '/config')",
         "self.assertNotIn('NODE_OPTIONS', env)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: settings unknown values withheld and environment allowlist. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_settings_unknown_values_withheld_and_environment_allowlist"
     },
     {
       "repo": "arbol-claude-driver",
@@ -592,13 +681,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 159,
       "end_before": 174,
-      "reason": "Scenario: key validation and quota math resets and order. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: key validation and quota math resets and order. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 181,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 219,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_key_validation_and_quota_math_resets_and_order",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 166,
@@ -609,7 +698,11 @@
         "self.assertIn('U+000A', str(caught.exception))",
         "self.assertEqual([window['usedPercent'] for window in report['windows']], [25, 40, 7])",
         "self.assertEqual(report['windows'][0]['windowMinutes'], 300)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: key validation and quota math resets and order. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_key_validation_and_quota_math_resets_and_order"
     },
     {
       "repo": "arbol-claude-driver",
@@ -619,13 +712,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 176,
       "end_before": 185,
-      "reason": "Scenario: limit report windows count tokens and map nothing else. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: limit report windows count tokens and map nothing else. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 200,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 238,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_limit_report_windows_count_tokens_and_map_nothing_else",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 185,
@@ -636,7 +729,11 @@
         "report is not None",
         "self.assertEqual([(window['kind'], window['label'], window['resource']) for window in report['windows']], [('session', 'Five hours', 'tokens'), ('weekly', 'Seven days', 'tokens')])",
         "self.assertEqual([window['usedPercent'] for window in report['windows']], [63, 15])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: limit report windows count tokens and map nothing else. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_limit_report_windows_count_tokens_and_map_nothing_else"
     },
     {
       "repo": "arbol-claude-driver",
@@ -646,13 +743,13 @@
       "class": "CompatibilityTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 187,
       "end_before": 196,
-      "reason": "Scenario: command frame rejects unknowns and preserves literal prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: command frame rejects unknowns and preserves literal prompt. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 213,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 251,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CompatibilityTests.test_command_frame_rejects_unknowns_and_preserves_literal_prompt",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 198,
@@ -663,7 +760,11 @@
         "self.assertEqual(parsed.positionals, ['--literal'])",
         "self.assertEqual(parsed.options['label'], ['x=a=b'])",
         "self.assertTrue(supported_version('2.1.289'))"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: command frame rejects unknowns and preserves literal prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CompatibilityTests.test_command_frame_rejects_unknowns_and_preserves_literal_prompt"
     },
     {
       "repo": "arbol-claude-driver",
@@ -673,20 +774,24 @@
       "class": "ProcessGroupTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 200,
       "end_before": 210,
-      "reason": "Scenario: a group that has exited but is not reaped is ending. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: a group that has exited but is not reaped is ending. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 229,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 267,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::ProcessGroupTests.test_a_group_that_has_exited_but_is_not_reaped_is_ending",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 214,
       "layout_revision": "2bd4e7404271629cbd084b37e71cf874f1afaa4b",
       "support_file": "tests/test_runtime.py",
       "description": "A group that has exited but is not reaped is ending.",
-      "assertion_examples": []
+      "assertion_examples": [],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: a group that has exited but is not reaped is ending. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.ProcessGroupTests.test_a_group_that_has_exited_but_is_not_reaped_is_ending"
     },
     {
       "repo": "arbol-claude-driver",
@@ -696,13 +801,13 @@
       "class": "StateTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 223,
       "end_before": 234,
-      "reason": "Scenario: private atomic state and newer format is untouched. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: private atomic state and newer format is untouched. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 246,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 284,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::StateTests.test_private_atomic_state_and_newer_format_is_untouched",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 239,
@@ -713,7 +818,11 @@
         "self.assertEqual(read_json(file), {'unicode': '😀'})",
         "self.assertEqual(stat.S_IMODE(file.stat().st_mode), 384)",
         "self.assertEqual(stat.S_IMODE(file.parent.stat().st_mode), 448)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: private atomic state and newer format is untouched. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.StateTests.test_private_atomic_state_and_newer_format_is_untouched"
     },
     {
       "repo": "arbol-claude-driver",
@@ -723,13 +832,13 @@
       "class": "StateTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 236,
       "end_before": 253,
-      "reason": "Scenario: process identity and lock contention. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: process identity and lock contention. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 261,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 299,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::StateTests.test_process_identity_and_lock_contention",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 254,
@@ -740,7 +849,11 @@
         "owner",
         "self.assertIsNotNone(owner)",
         "self.assertTrue(await owner_alive(owner))"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: process identity and lock contention. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.StateTests.test_process_identity_and_lock_contention"
     },
     {
       "repo": "arbol-claude-driver",
@@ -772,13 +885,13 @@
       "class": "StateTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 279,
       "end_before": 289,
-      "reason": "Scenario: duplicate run identifiers and safe paths. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: duplicate run identifiers and safe paths. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 282,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 320,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::StateTests.test_duplicate_run_identifiers_and_safe_paths",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 299,
@@ -789,7 +902,11 @@
         "self.assertEqual(caught.exception.result['code'], 'in_use')",
         "self.assertNotEqual(Chats(self.state).path('anthropic', digest('chat')), Chats(self.state).path('zai', digest('chat')))",
         "self.assertRaises(Failure)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: duplicate run identifiers and safe paths. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.StateTests.test_duplicate_run_identifiers_and_safe_paths"
     },
     {
       "repo": "arbol-claude-driver",
@@ -799,13 +916,13 @@
       "class": "StateTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 291,
       "end_before": 304,
-      "reason": "Scenario: subscriptions late check and usage cannot overwrite newer state. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: subscriptions late check and usage cannot overwrite newer state. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 296,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 334,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 313,
@@ -816,7 +933,11 @@
         "self.assertEqual(latest['state'], 'signed_out')",
         "self.assertEqual(latest['label'], 'Latest')",
         "self.assertNotIn('lastUsage', latest)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: subscriptions late check and usage cannot overwrite newer state. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state"
     },
     {
       "repo": "arbol-claude-driver",
@@ -826,13 +947,13 @@
       "class": "StateTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 306,
       "end_before": 319,
-      "reason": "Scenario: legacy split surrogate map rebuilds safely. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: legacy split surrogate map rebuilds safely. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 313,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 351,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::StateTests.test_legacy_split_surrogate_map_rebuilds_safely",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 330,
@@ -843,7 +964,11 @@
         "self.assertEqual(plan['continuity'], 'rebuilt')",
         "self.assertEqual(plan['rebuildReason'], 'history_differs')",
         "self.assertFalse(plan['resume'])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: legacy split surrogate map rebuilds safely. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.StateTests.test_legacy_split_surrogate_map_rebuilds_safely"
     },
     {
       "repo": "arbol-claude-driver",
@@ -853,13 +978,13 @@
       "class": "StateTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 321,
       "end_before": 337,
-      "reason": "Scenario: failed live check reports observed cost and one attempt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: failed live check reports observed cost and one attempt. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 330,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 368,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::StateTests.test_failed_live_check_reports_observed_cost_and_one_attempt",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 347,
@@ -870,7 +995,11 @@
         "self.assertEqual(status, 1)",
         "self.assertEqual(report['inferenceRequests'], 1)",
         "self.assertEqual(report['turnsAttempted'], 1)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: failed live check reports observed cost and one attempt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.StateTests.test_failed_live_check_reports_observed_cost_and_one_attempt"
     },
     {
       "repo": "arbol-claude-driver",
@@ -880,13 +1009,13 @@
       "class": "StateTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 339,
       "end_before": 347,
-      "reason": "Scenario: live check signed in gate precedes tool and prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: live check signed in gate precedes tool and prompt. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 350,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 388,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::StateTests.test_live_check_signed_in_gate_precedes_tool_and_prompt",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 367,
@@ -897,7 +1026,11 @@
         "self.assertEqual(caught.exception.result['code'], 'not_signed_in')",
         "inspect.assert_not_called()",
         "spawn.assert_not_called()"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: live check signed in gate precedes tool and prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.StateTests.test_live_check_signed_in_gate_precedes_tool_and_prompt"
     },
     {
       "repo": "arbol-claude-driver",
@@ -907,13 +1040,13 @@
       "class": "TransportTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 351,
       "end_before": 361,
-      "reason": "Scenario: generated python helper quotes spaced interpreter and arguments. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: generated python helper quotes spaced interpreter and arguments. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 365,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 403,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::TransportTests.test_generated_python_helper_quotes_spaced_interpreter_and_arguments",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 381,
@@ -924,7 +1057,11 @@
         "self.assertEqual(result['code'], 0)",
         "self.assertEqual(result['stdout'], repr(arguments) + '\\n')",
         "self.assertTrue(helper.read_text().startswith('#!/bin/sh\\nexec '))"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: generated python helper quotes spaced interpreter and arguments. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.TransportTests.test_generated_python_helper_quotes_spaced_interpreter_and_arguments"
     },
     {
       "repo": "arbol-claude-driver",
@@ -934,13 +1071,13 @@
       "class": "TransportTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 363,
       "end_before": 372,
-      "reason": "Scenario: child command drains stderr and honors cancel. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: child command drains stderr and honors cancel. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 379,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 417,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::TransportTests.test_child_command_drains_stderr_and_honors_cancel",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 395,
@@ -951,7 +1088,11 @@
         "self.assertEqual(result, {'code': 0, 'stdout': 'ok\\n'})",
         "self.assertLess(time.monotonic() - started, 1)",
         "self.assertRaises(Failure)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: child command drains stderr and honors cancel. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.TransportTests.test_child_command_drains_stderr_and_honors_cancel"
     },
     {
       "repo": "arbol-claude-driver",
@@ -961,13 +1102,13 @@
       "class": "TransportTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 374,
       "end_before": 388,
-      "reason": "Scenario: detached pipe holder cannot keep command alive. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: detached pipe holder cannot keep command alive. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 392,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 430,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::TransportTests.test_detached_pipe_holder_cannot_keep_command_alive",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 408,
@@ -977,7 +1118,11 @@
       "assertion_examples": [
         "self.assertEqual(result['code'], 0)",
         "self.assertLess(time.monotonic() - started, 2)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: detached pipe holder cannot keep command alive. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.TransportTests.test_detached_pipe_holder_cannot_keep_command_alive"
     },
     {
       "repo": "arbol-claude-driver",
@@ -1009,13 +1154,13 @@
       "class": "TransportTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 405,
       "end_before": 407,
-      "reason": "Scenario: group cleanup refuses a reused leader. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: group cleanup refuses a reused leader. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 410,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 448,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::TransportTests.test_group_cleanup_refuses_a_reused_leader",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 441,
@@ -1024,7 +1169,11 @@
       "description": "Group cleanup refuses a reused leader.",
       "assertion_examples": [
         "self.assertEqual(remaining_groups([owner], [{'pid': 123, 'group': 456, 'zombie': False, 'startedAt': now(1)}]), [])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: group cleanup refuses a reused leader. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.TransportTests.test_group_cleanup_refuses_a_reused_leader"
     },
     {
       "repo": "arbol-claude-driver",
@@ -1034,13 +1183,13 @@
       "class": "TransportTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 409,
       "end_before": 424,
-      "reason": "Scenario: secret command fresh environment and single newline. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: secret command fresh environment and single newline. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 416,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 454,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 447,
@@ -1051,7 +1200,11 @@
         "self.assertEqual(await secrets.read('account', source), '1key')",
         "self.assertEqual(await secrets.read('account', source), '2key')",
         "self.assertEqual(await secrets.read('account', source), 'key\\n')"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: secret command fresh environment and single newline. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.TransportTests.test_secret_command_fresh_environment_and_single_newline"
     },
     {
       "repo": "arbol-claude-driver",
@@ -1061,13 +1214,13 @@
       "class": "RequestTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 433,
       "end_before": 444,
-      "reason": "Scenario: typed request cli replacement labels and literal prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: typed request cli replacement labels and literal prompt. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 438,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 476,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::RequestTests.test_typed_request_cli_replacement_labels_and_literal_prompt",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 473,
@@ -1078,7 +1231,11 @@
         "self.assertIsInstance(parsed, ValidatedRequest)",
         "self.assertEqual(parsed.tools, 'all')",
         "self.assertEqual(parsed.record()['additionalDirectories'], ['/tmp'])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: typed request cli replacement labels and literal prompt. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.RequestTests.test_typed_request_cli_replacement_labels_and_literal_prompt"
     },
     {
       "repo": "arbol-claude-driver",
@@ -1088,13 +1245,13 @@
       "class": "RequestTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 446,
       "end_before": 458,
-      "reason": "Scenario: malformed nested json values are invalid input. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: malformed nested json values are invalid input. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 453,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 491,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::RequestTests.test_malformed_nested_json_values_are_invalid_input",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 488,
@@ -1104,7 +1261,11 @@
       "assertion_examples": [
         "self.assertEqual(caught.exception.result['code'], 'invalid_input')",
         "self.assertRaises(Failure)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: malformed nested json values are invalid input. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.RequestTests.test_malformed_nested_json_values_are_invalid_input"
     },
     {
       "repo": "arbol-claude-driver",
@@ -1114,13 +1275,13 @@
       "class": "ProtocolTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 484,
       "end_before": 496,
-      "reason": "Scenario: questions validate answers duplicate ack and withdrawal. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: questions validate answers duplicate ack and withdrawal. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 472,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 510,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::ProtocolTests.test_questions_validate_answers_duplicate_ack_and_withdrawal",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 528,
@@ -1131,7 +1292,11 @@
         "self.assertIn('ask', self.protocol.questions)",
         "self.assertFalse(await self.protocol.answer('ask', {'type': 'answers', 'answers': {'Choose': ['Blue']}}))",
         "self.assertEqual(len(self.sent), 1)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: questions validate answers duplicate ack and withdrawal. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.ProtocolTests.test_questions_validate_answers_duplicate_ack_and_withdrawal"
     },
     {
       "repo": "arbol-claude-driver",
@@ -1141,13 +1306,13 @@
       "class": "ProtocolTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 498,
       "end_before": 510,
-      "reason": "Scenario: error fields override wording and usage never double counts. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: error fields override wording and usage never double counts. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 488,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 526,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::ProtocolTests.test_error_fields_override_wording_and_usage_never_double_counts",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 544,
@@ -1158,7 +1323,11 @@
         "self.assertEqual(error.result['code'], 'credential_rejected')",
         "self.assertEqual(self.events.usage, {'inputTokens': 5, 'outputTokens': 6, 'model': 'haiku'})",
         "self.assertNotIn('costUsd', self.events.usage)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: error fields override wording and usage never double counts. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.ProtocolTests.test_error_fields_override_wording_and_usage_never_double_counts"
     },
     {
       "repo": "arbol-claude-driver",
@@ -1168,13 +1337,13 @@
       "class": "ProtocolTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 512,
       "end_before": 526,
-      "reason": "Scenario: utf8 tool result cut and single final cleanup. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: utf8 tool result cut and single final cleanup. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 504,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 542,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::ProtocolTests.test_utf8_tool_result_cut_and_single_final_cleanup",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 560,
@@ -1185,7 +1354,11 @@
         "self.assertTrue(result['truncated'])",
         "self.assertLessEqual(len(utf8(result['result'])), 200 * 1024)",
         "self.assertNotIn('�', result['result'])"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: utf8 tool result cut and single final cleanup. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.ProtocolTests.test_utf8_tool_result_cut_and_single_final_cleanup"
     },
     {
       "repo": "arbol-claude-driver",
@@ -1195,13 +1368,13 @@
       "class": "CliLifecycleTests",
       "kind": "python",
       "tier": "mid",
-      "status": "commented",
+      "status": "available",
       "line_before": 530,
       "end_before": 558,
-      "reason": "Scenario: replacing signin preserves failure exit status. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "reason": "Scenario: replacing signin preserves failure exit status. Not promoted to top tier because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
       "review": "execution-default",
-      "line": 525,
-      "file_sha256": "0b79483189e3b0c83c32e510e50f34af728ea5834203eb70117424ee29a5d0ef",
+      "line": 563,
+      "file_sha256": "9162e5b36ceb719a3a3c16ab6a636d26475f6acdbbfdcd45c23065498136a1a4",
       "previous_id": "tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status",
       "previous_file": "tests/test_runtime.py",
       "previous_line": 581,
@@ -1212,7 +1385,11 @@
         "first.stdout",
         "self.assertEqual(opened['step'], 'open_url')",
         "self.assertEqual(second.returncode, 0, second_out)"
-      ]
+      ],
+      "execution": "explicit-testing-task-only",
+      "restored_from_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+      "previous_reason": "Scenario: replacing signin preserves failure exit status. Disabled because no independently reviewed top-tier rationale was established for this case. Mid is provisional, not a verdict that every assertion is useful.",
+      "selector": "test_mid_runtime.CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status"
     }
   ],
   "removed_low": [
@@ -1239,7 +1416,23 @@
     "top": "tests/top",
     "mid": "tests/mid",
     "mid_document": "MID_TIER.md",
-    "shared_support": "Original paths retain helpers and refusal entry points, with all inventoried case bodies moved.",
+    "shared_support": "Unit fixtures retain their original paths. Compatibility entries load standalone implementations from the mid folder; source-package test APIs load lazily.",
     "source_mapping": "previous_id, previous_file and previous_line retain the pre-move address; no owner-store migration or ingest performed."
+  },
+  "commented_reset_counts": {
+    "python_active": 2,
+    "python_commented": 38,
+    "programs_active": 0,
+    "node_cases_commented": 0,
+    "scenario_functions_commented": 0,
+    "programs_commented": 1,
+    "entrypoints_guarded": 5,
+    "low_removed_previously": 2
+  },
+  "restoration": {
+    "date": "2026-10-29",
+    "beat": "SYL-326",
+    "source_revision": "c24ccb9a78e7fa08fd2a20373167db7880f4ee92",
+    "execution": "Explicit testing task only; no tests run for restoration."
   }
 }

@@ -1,6 +1,12 @@
-# Shared fixtures only; test bodies are in top/ and mid/. See TESTS.md.
+# Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Offline boundaries, format-1 compatibility and asynchronous lifecycle regressions."""
 from __future__ import annotations
+import signal
+import shlex
+import stat
+import subprocess
+from unittest.mock import AsyncMock, patch
+
 
 import asyncio
 import os
@@ -13,6 +19,16 @@ from typing import Any
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+from arbol_claude_driver.continuity import Chats, Runs  # noqa: E402
+from arbol_claude_driver.core import Failure, Record, clean_environment, compact, loads, now, number, parse_arguments, read_settings, safe_failure, utf8  # noqa: E402
+from arbol_claude_driver.history import MessageDigest, digest, encode_folder, result_text, session_lines  # noqa: E402
+from arbol_claude_driver.dev import live_check  # noqa: E402
+from arbol_claude_driver.processes import child_command, kill_group, python_launcher, remaining_groups, supported_version  # noqa: E402
+from arbol_claude_driver.protocol import Output, RunEvents, RunProtocol, limit_report, run_failure, truncate_result  # noqa: E402
+from arbol_claude_driver.request import read_request, run_arguments  # noqa: E402
+from arbol_claude_driver.state import State, owner_alive, parse_owner, process_owner, read_json, write_json  # noqa: E402
+from arbol_claude_driver.subscriptions import Authentication, Secrets, Subscriptions, family_settings, keychain_service, normalize_quota, validate_key  # noqa: E402
+
 from arbol_claude_driver.continuity import Runs  # noqa: E402
 from arbol_claude_driver.core import Failure, Record, compact, now, parse_arguments, utf8  # noqa: E402
 from arbol_claude_driver.models import ValidatedRequest  # noqa: E402
@@ -43,7 +59,7 @@ class StateTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TransportTests(unittest.IsolatedAsyncioTestCase):
-    pass  # Shared fixture base; case bodies live in top/ and mid/.
+    pass  # Shared fixtures; case bodies live in top/ and mid/.
 
 
 class RequestTests(unittest.IsolatedAsyncioTestCase):
@@ -79,7 +95,6 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
 class CliLifecycleTests(unittest.IsolatedAsyncioTestCase):
     pass  # TEST-TIER-EMPTY-SUITE; helpers remain importable.
-
 
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.
