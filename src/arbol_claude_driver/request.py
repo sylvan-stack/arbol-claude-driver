@@ -52,6 +52,12 @@ async def read_request(command: Command, settings: Record, first_line: Callable[
     for field in ['runId', 'subscriptionId', 'model', 'effort', 'workingDirectory', 'chatSessionId', 'serviceTier']:
         if field in value and (not isinstance(value[field], str) or not value[field]):
             bad(f'Invalid request field {field}.')
+    if 'rootId' in value:
+        root_id, chat_id = value['rootId'], value.get('chatSessionId')
+        if not isinstance(root_id, str) or not re.fullmatch(r'[a-z0-9]+', root_id):
+            bad('Invalid request field rootId.')
+        if not isinstance(chat_id, str) or not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', chat_id):
+            bad('rootId requires a lower-case chatSessionId UUID with hyphens.')
     if 'systemPrompt' in value and not isinstance(value['systemPrompt'], str):
         bad('Invalid systemPrompt.')
     if 'serviceTier' in value:
