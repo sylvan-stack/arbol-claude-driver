@@ -77,12 +77,14 @@ def contract(folder: Path) -> int:
 
 
 def live(folder: Path) -> int:
-    home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    owner = pwd.getpwuid(os.getuid())
+    home = Path(owner.pw_dir)
     # The test Subscriptions live in a state directory of their own, not in the default one (DRV-D41).
     state = os.environ.get("ARBOL_BUILD_TEST_STATE_DIR", str(home / "Library/Application Support/Arbol/drivers/arbol-claude-driver"))
     if not state or not Path(state).is_absolute():
         raise ValueError("ARBOL_BUILD_TEST_STATE_DIR must be an absolute test state directory.")
-    env = {"HOME": str(home), "PATH": f"{home / '.local/bin'}:/usr/bin:/bin", "LANG": os.environ.get("LANG", "C")}
+    # claude finds its Keychain login under the account named by USER; without it the login is invisible.
+    env = {"HOME": str(home), "USER": owner.pw_name, "PATH": f"{home / '.local/bin'}:/usr/bin:/bin", "LANG": os.environ.get("LANG", "C")}
     return run([str(folder / ENTRY), "dev", "build-check", "--state-dir", state], cwd=folder, env=env)
 
 
