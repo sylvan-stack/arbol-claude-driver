@@ -17,7 +17,7 @@ from .processes import ACTUAL_HOME, close_pipes, end_run_groups, inspect_tool, k
 from .protocol import RunEvents, RunProtocol, exit_failure
 from .request import read_request, run_arguments, user_record
 from .state import private_directory, process_owner
-from .subscriptions import Subscriptions
+from .subscriptions import Subscriptions, is_test
 
 
 async def run(command: Command, subscriptions: Subscriptions, events: RunEvents, env: Env, build: str, cancel: asyncio.Event, input_reader: asyncio.StreamReader) -> int:
@@ -29,7 +29,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
     program = require_tool(tool)
     key = None
     runs, chats = Runs(subscriptions.state), Chats(subscriptions.state)
-    home = subscriptions.state.subscription(initial['id']) / 'home'
+    home = subscriptions.folder(initial['id'])
     plan, record = await chats.reserve(request, runs, home)
     fingerprint = MessageDigest()
     for item in request['history']:
@@ -92,7 +92,8 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         if request.get('workingDirectory') is None:
             private_directory(Path(cwd))
         child_env = await subscriptions.environment(initial['id'], env, key)
-        owner_args = owner_mcp_arguments(env.get('HOME', ACTUAL_HOME)) if request['tools'] == 'all' else []
+        # In ~/.claude the tool reads the owner's MCP servers itself; only a test home needs them passed (CLD-3.20, CLD-D20).
+        owner_args = owner_mcp_arguments(env.get('HOME', ACTUAL_HOME)) if request['tools'] == 'all' and is_test(initial['id']) else []
         launcher, shell = run_launchers(temp, env)
         child_env.update(CLAUDE_CODE_SHELL=str(shell), CLAUDE_CODE_DISABLE_AUTO_MEMORY='1', BASH_DEFAULT_TIMEOUT_MS='300000', BASH_MAX_TIMEOUT_MS='1800000', CLAUDE_CODE_MAX_RETRIES='3')
         if request['searchPath']:

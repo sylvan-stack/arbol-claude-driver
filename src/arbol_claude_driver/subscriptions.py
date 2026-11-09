@@ -107,8 +107,9 @@ class Subscriptions:
                 folder = self.state.subscription(identifier)
                 if identifier != 'anthropic' and read_json(folder / 'record.json') is None and read_json(folder / 'sign-in.json') is None:
                     timestamp = now()
-                    private_directory(folder / 'home')
-                    owner_skills(folder / 'home', str(self.settings_file.parent.parent))
+                    if is_test(identifier):
+                        private_directory(folder / 'home')
+                        owner_skills(folder / 'home', str(self.settings_file.parent.parent))
                     write_json(folder / 'record.json', {'id': identifier, 'family': family, 'label': label, 'auth': 'vendor_login' if family == 'anthropic' else 'key', 'state': 'signed_out', 'createdAt': timestamp, 'updatedAt': timestamp})
                     break
             if explicit is not None:
@@ -123,9 +124,10 @@ class Subscriptions:
                 raise Failure('invalid_input', 'Give the Subscription a non-empty label.')
             async with self.state.lock(identifier):
                 record = await self.record(identifier)
-                home = self.state.subscription(identifier) / 'home'
-                private_directory(home)
-                owner_skills(home, str(self.settings_file.parent.parent))
+                if is_test(identifier):
+                    home = self.folder(identifier)
+                    private_directory(home)
+                    owner_skills(home, str(self.settings_file.parent.parent))
                 write_json(self.state.subscription(identifier) / 'record.json', {**record, 'label': label, 'updatedAt': now()})
         return await self.get(identifier)
 
@@ -135,14 +137,25 @@ class Subscriptions:
             raise Failure('not_signed_in', 'Sign in to this Subscription first.', {'remedy': 'Sign in.'})
         return subscription
 
+    def folder(self, identifier: str) -> Path:
+        """The tool's home for this Subscription's children: the owner's `~/.claude`, or a test Subscription's own (CLD-1.2, CLD-D20)."""
+        if is_test(identifier):
+            return self.state.subscription(identifier) / 'home'
+        return Path(ACTUAL_HOME) / '.claude'
+
     async def environment(self, identifier: str, inherited: Env, key: str | None = None) -> Env:
         await self.get(identifier)
-        home = self.state.subscription(identifier) / 'home'
-        private_directory(home)
-        async with self.state.lock(identifier):
-            owner_skills(home, inherited.get('HOME', ACTUAL_HOME))
-        env = clean_environment(inherited, ACTUAL_HOME, str(home))
-        return env
+        if is_test(identifier):
+            home = self.folder(identifier)
+            private_directory(home)
+            async with self.state.lock(identifier):
+                owner_skills(home, inherited.get('HOME', ACTUAL_HOME))
+            return clean_environment(inherited, ACTUAL_HOME, str(home))
+        if identifier != 'anthropic':
+            # Its token sign-in (CLD-1.19) is not built; in ~/.claude it would run on the owner's own login.
+            raise Failure('unsupported', 'A further Anthropic Subscription needs its own token sign-in, which this Driver does not have yet (CLD-1.19).')
+        # No CLAUDE_CONFIG_DIR: the tool uses ~/.claude and the owner's own sign-in, as when started by hand (DRV-D42).
+        return clean_environment(inherited, ACTUAL_HOME)
 
     async def run_report(self, initial: Record, failure: Record | None = None, usage: Record | None = None) -> None:
         if (failure or {}).get('code') != 'credential_rejected' and not usage:
@@ -158,6 +171,11 @@ class Subscriptions:
                 current.update(state='needs_attention', problem=failure, checkedAt=now())
             current['updatedAt'] = now()
             write_json(self.state.subscription(initial['id']) / 'record.json', current)
+
+
+def is_test(identifier: str) -> bool:
+    """A test Subscription, such as `test-anthropic`, keeps a home of its own for probes and live checks (CLD-D20)."""
+    return identifier.startswith('test-')
 
 
 def keychain_service(directory: Path, home: str = ACTUAL_HOME) -> str:
@@ -423,7 +441,7 @@ class Authentication:
 
     async def status(self, identifier: str) -> Record:
         env = await self.subscriptions.environment(identifier, self.env)
-        result = await child_command(await self.tool(), ['auth', 'status', '--json'], env, env['CLAUDE_CONFIG_DIR'], 20, self.cancel)
+        result = await child_command(await self.tool(), ['auth', 'status', '--json'], env, str(self.subscriptions.folder(identifier)), 20, self.cancel)
         try:
             value = loads(result['stdout'])
         except ValueError:
@@ -466,7 +484,7 @@ class Authentication:
         child = None
         try:
             env = await self.subscriptions.environment(identifier, self.env)
-            child = await spawn(await self.tool(), ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions'], {**env, 'CLAUDE_CODE_DISABLE_AUTO_MEMORY': '1'}, env['CLAUDE_CONFIG_DIR'])
+            child = await spawn(await self.tool(), ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions'], {**env, 'CLAUDE_CODE_DISABLE_AUTO_MEMORY': '1'}, str(self.subscriptions.folder(identifier)))
             assert child.stdin and child.stdout and child.stderr
             drain = asyncio.create_task(child.stderr.read())
             child.stdin.write((compact({'type': 'control_request', 'request_id': 'catalog', 'request': {'subtype': 'initialize'}}) + '\n').encode())
@@ -518,6 +536,16 @@ class Authentication:
         timed_out = False
         output = ''
         try:
+            if not is_test(identifier):
+                # `anthropic` is the sign-in of every `claude` on this Mac: when it is already
+                # logged in, take that login and start none, so it is never replaced (CLD-D19).
+                existing = await self.status(identifier)
+                if existing['accepted']:
+                    await self.save(identifier, lambda record: {**{k: v for k, v in record.items() if k not in {'problem', 'account'}}, 'state': 'signed_in', **({'account': existing['account']} if existing.get('account') else {}), 'checkedAt': now()}, owner=progress['owner'])
+                    succeeded = True
+                    await self.release(identifier, progress['owner'])
+                    await emit({'step': 'done', 'subscription': await self.subscriptions.get(identifier)})
+                    return 0
             await self.save(identifier, self.unsigned, owner=progress['owner'])
             async with asyncio.timeout(max(.001, epoch(progress['expiresAt']) - time.time())):
                 folder = self.temporary(identifier)
@@ -526,7 +554,7 @@ class Authentication:
                 browser = folder / 'browser'
                 python_launcher(browser, f'import os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
                 env = await self.subscriptions.environment(identifier, self.env)
-                child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, env['CLAUDE_CONFIG_DIR'])
+                child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, str(self.subscriptions.folder(identifier)))
                 assert child.stdout and child.stderr and child.stdin
                 tool = await process_owner(child.pid)
                 async with self.subscriptions.state.lock(identifier):
@@ -606,12 +634,13 @@ class Authentication:
                     current = self.progress(identifier)
                     if current and current['owner'] == progress['owner']:
                         write_json(self.subscriptions.state.subscription(identifier) / 'record.json', {**self.unsigned(await self.subscriptions.record(identifier)), 'updatedAt': now()})
-                if initial['family'] == 'anthropic':
+                # Only a test home of its own is signed out here; in ~/.claude this would sign out every `claude` on the Mac.
+                if initial['family'] == 'anthropic' and is_test(identifier):
                     env = await self.subscriptions.environment(identifier, self.env)
                     cleanup = await inspect_tool(self.subscriptions.state.directory, self.subscriptions.settings.get('toolPath'), self.env, asyncio.Event())
                     if cleanup.get('path') and cleanup['supported']:
                         try:
-                            await child_command(cleanup['path'], ['auth', 'logout'], env, env['CLAUDE_CONFIG_DIR'])
+                            await child_command(cleanup['path'], ['auth', 'logout'], env, str(self.subscriptions.folder(identifier)))
                         except Failure:
                             pass
             await self.release(identifier, progress['owner'])
@@ -619,6 +648,9 @@ class Authentication:
     async def sign_out(self, identifier: str, force: bool, remove: bool = False) -> Record | None:
         from .continuity import Runs
         initial = await self.subscriptions.get(identifier)
+        if identifier == 'anthropic':
+            # Signing it out would sign out every `claude` on this Mac, the owner's own sessions included (CLD-1.8, DRV-D43).
+            raise Failure('invalid_input', 'The anthropic Subscription is the sign-in of claude itself on this Mac; sign out in claude, not here.')
         runs = Runs(self.subscriptions.state)
         for record in await runs.list():
             if record['subscriptionId'] == identifier:
@@ -630,7 +662,7 @@ class Authentication:
             await self.save(identifier, self.unsigned, owner=progress['owner'])
             if initial['family'] == 'anthropic' and initial['state'] != 'signed_out':
                 env = await self.subscriptions.environment(identifier, self.env)
-                result = await child_command(await self.tool(), ['auth', 'logout'], env, env['CLAUDE_CONFIG_DIR'], cancel=self.cancel)
+                result = await child_command(await self.tool(), ['auth', 'logout'], env, str(self.subscriptions.folder(identifier)), cancel=self.cancel)
                 if result['code'] != 0:
                     raise Failure('tool_failed', 'claude could not sign the account out.')
             if remove:
