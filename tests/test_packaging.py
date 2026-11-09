@@ -2,12 +2,13 @@
 """Delivery boundaries: pinned archives, numbered records and nonempty checks."""
 
 from __future__ import annotations
-import hashlib
-import json
-import os
-import pwd
-import tempfile
-from unittest.mock import patch
+# Re-exported: tests/top and tests/mid import these names from this module (TESTS.md).
+import hashlib  # noqa: F401
+import json  # noqa: F401
+import os  # noqa: F401
+import pwd  # noqa: F401
+import tempfile  # noqa: F401
+from unittest.mock import patch  # noqa: F401
 
 
 import sys
@@ -15,9 +16,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import build_support  # noqa: E402
-import check_build  # noqa: E402
-import package_build  # noqa: E402
+import build_support  # noqa: E402, F401
+import check_build  # noqa: E402, F401
+import package_build  # noqa: E402, F401
 
 
 class PackagingTests(unittest.TestCase):

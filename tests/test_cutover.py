@@ -1,6 +1,5 @@
 # Shared fixtures; case bodies live in top/ and mid/. See TESTS.md.
 """Contract-2 retirement refuses before credentials, native startup or record mutation."""
-from typing import Any
 
 
 import json
@@ -10,6 +9,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+# The names tests/mid imports from this module, exported explicitly (TESTS.md).
+__all__ = ['json']
 
 ROOT = Path(__file__).resolve().parents[1]
 

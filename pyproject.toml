@@ -13,6 +13,8 @@ python_version = "3.14"
 strict = true
 mypy_path = ["src", "scripts"]
 files = ["src/arbol_claude_driver", "tests", "scripts", "bin/entry.py"]
+# Archived sources run inside the product package or wait for restoration; they cannot be checked alone (TESTS.md).
+exclude = ["^tests/mid/archived/"]
 
 [tool.ruff]
 target-version = "py314"

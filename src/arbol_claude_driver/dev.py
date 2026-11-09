@@ -26,7 +26,8 @@ def verify(condition: Any, message: str) -> None:
 
 
 async def probe(subscriptions: Subscriptions, inherited: Env, cancel: asyncio.Event) -> Record:
-    return await _mid_tier_namespace()['probe'](subscriptions, inherited, cancel)
+    result: Record = await _mid_tier_namespace()['probe'](subscriptions, inherited, cancel)
+    return result
 
 
 async def check_account(subscriptions: Subscriptions) -> Record:
@@ -48,12 +49,13 @@ def usage_change(before: Record, after: Record) -> list[Record]:
 
 
 async def live_check(build_only: bool, subscriptions: Subscriptions, inherited: Env, cancel: asyncio.Event) -> tuple[int, Record]:
-    return await _mid_tier_namespace()['live_check'](build_only, subscriptions, inherited, cancel)
+    result: tuple[int, Record] = await _mid_tier_namespace()['live_check'](build_only, subscriptions, inherited, cancel)
+    return result
 
 # Archived complete imports; restore needed names in their original scope, not at this file tail.
 
 
-def _mid_tier_namespace():
+def _mid_tier_namespace() -> dict[str, Any]:
     """Load test-only code on explicit invocation, leaving normal product imports alone."""
     from pathlib import Path as _TierPath
     from types import ModuleType as _TierModule
