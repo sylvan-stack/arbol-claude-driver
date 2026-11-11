@@ -19,7 +19,7 @@ from .history import encode_folder
 from .processes import child_command
 
 FIXTURES = Path(__file__).resolve().parents[2] / 'test'
-RUN_SCENARIOS = {'C4', 'C5', 'C7', 'C8', 'C26', 'C27', 'C28', 'C29', 'C30', 'C9', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20', 'C25', 'C32', 'C33', 'C35', 'C36', 'C37', 'C38', 'C40', 'C42', 'C43'}
+RUN_SCENARIOS = {'C44', 'C4', 'C5', 'C7', 'C8', 'C26', 'C27', 'C28', 'C29', 'C30', 'C9', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20', 'C25', 'C32', 'C33', 'C35', 'C36', 'C37', 'C38', 'C40', 'C42', 'C43'}
 
 
 class StandIn:
@@ -43,7 +43,7 @@ class StandIn:
             return None
 
     def log(self, stage: str | None, checks: Record) -> None:
-        record = {'scenario': self.scenario, 'part': self.part, 'arguments': self.args, 'environment': sorted(os.environ), 'workingDirectory': os.getcwd(), 'checks': checks, **({'stage': stage} if stage else {})}
+        record = {'scenario': self.scenario, 'part': self.part, 'arguments': self.args, 'environment': sorted(os.environ), 'workingDirectory': os.getcwd(), 'checks': {**checks, **arbol_identity()}, **({'stage': stage} if stage else {})}
         with (self.folder / 'received.jsonl').open('a') as handle:
             handle.write(compact(record) + '\n')
 
@@ -442,6 +442,11 @@ class StandIn:
         return None
 
 
+def arbol_identity() -> Record:
+    """C44: the Arbol chat identity this tool was launched with (DRV-2.37); identifiers, not secrets."""
+    return {key: os.environ[name] for key, name in (('arbolRoot', 'ARBOL_ROOT'), ('arbolChat', 'ARBOL_CHAT')) if name in os.environ}
+
+
 async def stand_in(folder: Path, args: list[str], input_reader: asyncio.StreamReader) -> int:
     # The CLI event writer makes stdout nonblocking. This independent vendor
     # fixture uses TextIO writes, which require a blocking fd for whole JSONL.
@@ -457,7 +462,7 @@ async def stand_in(folder: Path, args: list[str], input_reader: asyncio.StreamRe
     credential = Path(home) / 'stand-in-login.json' if home else None
     logged = credential is not None and credential.is_file()
     checks = {'home': home, 'privateHome': os.getcwd() == home, 'source': script.subscription['source'], 'synthetic': 'Successful login, rejection and unavailable variants of the recorded protocol', 'injectedVariablesAbsent': not any(key in os.environ for key in ['ANTHROPIC_API_KEY', 'CLAUDECODE', 'CLAUDE_SESSION_ID', 'OPENAI_API_KEY', 'CODEX_HOME', 'NODE_OPTIONS']), 'hasCredential': logged} if subscription_scenario else {}
-    record = {'scenario': scenario, 'part': part, 'arguments': args, 'environment': sorted(os.environ), 'workingDirectory': os.getcwd(), 'toolVersion': version, 'checks': checks}
+    record = {'scenario': scenario, 'part': part, 'arguments': args, 'environment': sorted(os.environ), 'workingDirectory': os.getcwd(), 'toolVersion': version, 'checks': {**checks, **arbol_identity()}}
     with (folder / 'received.jsonl').open('a') as handle:
         handle.write(compact(record) + '\n')
     if version is None:
