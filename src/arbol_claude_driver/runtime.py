@@ -91,9 +91,10 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         cwd = request.get('workingDirectory', str(temp / 'work'))
         if request.get('workingDirectory') is None:
             private_directory(Path(cwd))
+        # The subscription's clean environment excludes inherited Arbol identity.
         child_env = await subscriptions.environment(initial['id'], env, key)
-        if 'rootId' in request:
-            child_env.update(ARBOL_ROOT=request['rootId'], ARBOL_CHAT=request['chatSessionId'])
+        if request.get('arbolChat') is True:
+            child_env['ARBOL_CHAT'] = request['chatSessionId']
         # In ~/.claude the tool reads the owner's MCP servers itself; only a test home needs them passed (CLD-3.20, CLD-D20).
         owner_args = owner_mcp_arguments(env.get('HOME', ACTUAL_HOME)) if request['tools'] == 'all' and is_test(initial['id']) else []
         launcher, shell = run_launchers(temp, env)
