@@ -62,3 +62,9 @@ and revisions, so obvious or redundant checks are not generated again. All
 archived lines are comments, including imports and registrations. They add no
 runnable coverage. Re-admission needs distinct new evidence and owner-requested
 test work; a testing request alone does not make low-tier cases useful.
+
+## Real existing profiles for live qualification · 12 November 2026
+
+Live gates use a real existing provider profile and Subscription ID directly. The default Claude selection is the existing `anthropic` record in the native Driver state directory `~/Library/Application Support/Arbol/drivers/claude`. `ARBOL_BUILD_LIVE_SUBSCRIPTION` selects an existing real ID. The historical environment name `ARBOL_BUILD_TEST_STATE_DIR` remains an override for an existing real Driver state directory. Missing, signed-out and test-* selections refuse before inference. Qualification never creates a profile, aliases one, copies authentication or starts sign-in.
+
+The real profile retains its native credential binding and normal vendor behavior. Application databases, runtime and Build registry remain disposable. Full Build gates, real inference and actual completion and usage observations remain required. Earlier test-profile records keep their historical scope.

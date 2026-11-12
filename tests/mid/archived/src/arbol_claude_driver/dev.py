@@ -157,13 +157,17 @@ async def probe(subscriptions: Subscriptions, inherited: Env, cancel: asyncio.Ev
     return {**report, 'outcome': outcome}
 
 
-async def check_account(subscriptions: Subscriptions) -> Record:
-    account = await subscriptions.require_signed_in('test-anthropic')
+async def check_account(subscriptions: Subscriptions, identifier: str = 'anthropic') -> Record:
+    if identifier.startswith('test-'):
+        raise Failure('invalid_input', 'Live qualification requires a real existing Subscription.')
+    if not (subscriptions.state.subscription(identifier) / 'record.json').is_file():
+        raise Failure('not_found', 'Select a real existing Subscription before live qualification.')
+    account = await subscriptions.require_signed_in(identifier)
     if account['family'] != 'anthropic':
-        raise Failure('invalid_input', 'test-anthropic must belong to the anthropic family.')
+        raise Failure('invalid_input', 'The selected Subscription must belong to the anthropic family.')
     usage = account.get('lastUsage', {'outcome': 'unsupported', 'fetchedAt': now(), 'windows': []})
     if any(window.get('limitReached') or window.get('usedPercent', 0) >= 100 for window in usage['windows']):
-        raise Failure('rate_limited', 'The test Subscription has a usage window used up. Wait before running the check.')
+        raise Failure('rate_limited', 'The selected Subscription has a usage window used up. Wait before running the check.')
     return dict(usage)
 
 
@@ -176,7 +180,8 @@ def usage_change(before: Record, after: Record) -> list[Record]:
 
 
 async def live_check(build_only: bool, subscriptions: Subscriptions, inherited: Env, cancel: asyncio.Event) -> tuple[int, Record]:
-    before = await check_account(subscriptions)
+    identifier = inherited.get('ARBOL_BUILD_LIVE_SUBSCRIPTION', 'anthropic')
+    before = await check_account(subscriptions, identifier)
     tool = await inspect_tool(subscriptions.state.directory, subscriptions.settings.get('toolPath'), inherited, cancel)
     program = require_tool(tool)
     temp_root = subscriptions.state.directory / 'tmp'
@@ -185,11 +190,11 @@ async def live_check(build_only: bool, subscriptions: Subscriptions, inherited: 
     cli = Path(__file__).resolve().parents[2] / 'bin/arbol-claude-driver'
     env = {**clean_environment(inherited, inherited.get('HOME', ACTUAL_HOME)), 'PATH': str(Path(sys.executable).parent) + ':' + str(Path(program).parent) + ':/usr/bin:/bin', **({'ARBOL_TEST_TIME_SCALE': inherited['ARBOL_TEST_TIME_SCALE']} if inherited.get('ARBOL_TEST_TIME_SCALE') else {})}
     checks: list[Record] = []
-    report: Record = {'check': 'dev.build-check' if build_only else 'dev.live-check', 'at': now(), 'toolVersion': tool['version'], 'subscriptionId': 'test-anthropic', 'model': 'haiku', 'turnsAttempted': 0, 'inferenceRequests': 0, 'tokenUsage': {}, 'usageBefore': before, 'checks': checks}
+    report: Record = {'check': 'dev.build-check' if build_only else 'dev.live-check', 'at': now(), 'toolVersion': tool['version'], 'subscriptionId': identifier, 'model': 'haiku', 'turnsAttempted': 0, 'inferenceRequests': 0, 'tokenUsage': {}, 'usageBefore': before, 'checks': checks}
     async def message(name: str, prompt: str, tools: bool = False, control: bool = False, stop: bool = False, chat: str | None = None, history: list[Record] | None = None) -> tuple[list[Record], str]:
-        await check_account(subscriptions)
+        await check_account(subscriptions, identifier)
         request = directory / (str(uuid.uuid4()) + '.json')
-        write_json(request, {'subscriptionId': 'test-anthropic', 'model': 'haiku', 'tools': 'all' if tools else 'none', **({'workingDirectory': str(directory)} if tools or chat else {}), **({'chatSessionId': chat} if chat else {}), 'history': history or [], 'input': {'role': 'user', 'text': prompt}, 'limits': {'totalSeconds': 60}})
+        write_json(request, {'subscriptionId': identifier, 'model': 'haiku', 'tools': 'all' if tools else 'none', **({'workingDirectory': str(directory)} if tools or chat else {}), **({'chatSessionId': chat} if chat else {}), 'history': history or [], 'input': {'role': 'user', 'text': prompt}, 'limits': {'totalSeconds': 60}})
         child = await spawn(str(cli), ['run', '--request', str(request), '--state-dir', str(subscriptions.state.directory), *(['--control'] if control or stop else [])], env, directory)
         assert child.stdin and child.stdout and child.stderr
         report['turnsAttempted'] += 1
@@ -257,7 +262,7 @@ async def live_check(build_only: bool, subscriptions: Subscriptions, inherited: 
         error, status = failure, 2 if cancel.is_set() else 1
     finally:
         shutil.rmtree(directory, ignore_errors=True)
-    after = (await subscriptions.get('test-anthropic')).get('lastUsage', before)
+    after = (await subscriptions.get(identifier)).get('lastUsage', before)
     result = {**report, 'outcome': 'passed' if status == 0 else 'cancelled' if status == 2 else 'failed', 'usageAfter': after, 'usageChange': usage_change(before, after), **({'error': safe_failure(error)} if error else {})}
     write_json(subscriptions.state.directory / 'research' / (('build-check-' if build_only else 'live-check-') + report['at'].replace(':', '-') + '.json'), result)
     return status, result

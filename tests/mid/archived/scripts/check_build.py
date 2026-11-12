@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import pwd
+import re
 import unittest
 
 
@@ -79,12 +80,18 @@ def contract(folder: Path) -> int:
 def live(folder: Path) -> int:
     owner = pwd.getpwuid(os.getuid())
     home = Path(owner.pw_dir)
-    # The test Subscriptions live in a state directory of their own, not in the default one (DRV-D41).
-    state = os.environ.get("ARBOL_BUILD_TEST_STATE_DIR", str(home / "Library/Application Support/Arbol/drivers/arbol-claude-driver"))
+    # The owner's live qualification scope selects an existing real profile directly.
+    state = os.environ.get("ARBOL_BUILD_TEST_STATE_DIR", str(home / "Library/Application Support/Arbol/drivers/claude"))
+    subscription = os.environ.get("ARBOL_BUILD_LIVE_SUBSCRIPTION", "anthropic")
     if not state or not Path(state).is_absolute():
-        raise ValueError("ARBOL_BUILD_TEST_STATE_DIR must be an absolute test state directory.")
+        raise ValueError("ARBOL_BUILD_TEST_STATE_DIR must name an absolute existing Driver state directory.")
+    if subscription.startswith("test-") or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", subscription):
+        raise ValueError("ARBOL_BUILD_LIVE_SUBSCRIPTION must name a real existing Subscription.")
+    if not (Path(state) / "format").is_file() or not (Path(state) / "subscriptions" / subscription / "record.json").is_file():
+        raise ValueError("Live qualification requires an existing registered Subscription.")
     # claude finds its Keychain login under the account named by USER; without it the login is invisible.
-    env = {"HOME": str(home), "USER": owner.pw_name, "PATH": f"{home / '.local/bin'}:/usr/bin:/bin", "LANG": os.environ.get("LANG", "C")}
+    env = {"HOME": str(home), "USER": owner.pw_name, "PATH": f"{home / '.local/bin'}:/usr/bin:/bin", "LANG": os.environ.get("LANG", "C"),
+           "ARBOL_BUILD_LIVE_SUBSCRIPTION": subscription}
     return run([str(folder / ENTRY), "dev", "build-check", "--state-dir", state], cwd=folder, env=env)
 
 

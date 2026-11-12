@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from .core import Env, Failure, Record, now
+from .core import Env, Failure, Record
 from .subscriptions import Subscriptions
 
 ENUMERATED = {'control_response', 'result', 'success', 'error', 'error_during_execution', 'none', 'claude.ai', 'firstParty', 'bypassPermissions', 'connected', 'failed', 'pending', 'needs-auth', 'low', 'medium', 'high', 'xhigh', 'max'}
@@ -30,14 +30,9 @@ async def probe(subscriptions: Subscriptions, inherited: Env, cancel: asyncio.Ev
     return result
 
 
-async def check_account(subscriptions: Subscriptions) -> Record:
-    account = await subscriptions.require_signed_in('test-anthropic')
-    if account['family'] != 'anthropic':
-        raise Failure('invalid_input', 'test-anthropic must belong to the anthropic family.')
-    usage = account.get('lastUsage', {'outcome': 'unsupported', 'fetchedAt': now(), 'windows': []})
-    if any(window.get('limitReached') or window.get('usedPercent', 0) >= 100 for window in usage['windows']):
-        raise Failure('rate_limited', 'The test Subscription has a usage window used up. Wait before running the check.')
-    return dict(usage)
+async def check_account(subscriptions: Subscriptions, identifier: str = 'anthropic') -> Record:
+    result: Record = await _mid_tier_namespace()['check_account'](subscriptions, identifier)
+    return result
 
 
 def usage_change(before: Record, after: Record) -> list[Record]:
