@@ -11,8 +11,9 @@ from typing import Any
 
 from .admission import Admission
 from .continuity import Runs
-from .core import Failure, build_identity, compact, fixed_wait, parse_arguments, read_settings, safe_failure
+from .core import Failure, build_identity, compact, fixed_wait, parse_arguments, read_settings, retired_route, safe_failure
 from .dev import live_check, probe
+from .identity import canonical_id, parse_expected
 from .processes import ACTUAL_HOME, inspect_tool
 from .protocol import Output, RunEvents
 from .runtime import run
@@ -60,12 +61,25 @@ async def main(args: list[str], admission: Admission | None = None) -> int:
                 loop.remove_signal_handler(name)
                 signal.signal(name, signal.SIG_DFL)
             return await stand_in(Path(command.positionals[0]).absolute(), command.positionals[2:], reader)
+        if command.name == 'subscriptions identity':
+            identifier = command.positionals[0]
+            if identifier in {'zai', 'claude-zai'}:
+                raise retired_route()
+            canonical_id(identifier)
+            expected = parse_expected(str(command.options['expect']) if 'expect' in command.options else None)
+            home = os.environ.get('HOME', ACTUAL_HOME)
+            file = Path(home) / '.arbol/arbol-claude-driver.json'
+            state = State(str(command.options.get('state-dir', str(Path(home) / 'Library/Application Support/Arbol/drivers/claude'))))
+            state.initialize(admission)
+            subscriptions = Subscriptions(state, {}, [], file)
+            await output.json(await subscriptions.identity(identifier, expected))
+            return 0
         fixed_wait(1)
         home = os.environ.get('HOME', ACTUAL_HOME)
         file = Path(home) / '.arbol/arbol-claude-driver.json'
         settings, notices = read_settings(file)
         state = State(str(command.options.get('state-dir', str(Path(home) / 'Library/Application Support/Arbol/drivers/claude'))))
-        state.initialize()
+        state.initialize(admission)
         identity = build_identity(payload=admission.payload)
         subscriptions = Subscriptions(state, settings, notices, file)
         authenticate = Authentication(subscriptions, dict(os.environ), cancel)
@@ -76,7 +90,7 @@ async def main(args: list[str], admission: Admission | None = None) -> int:
         if cancel.is_set():
             return 2
         if command.name == 'info':
-            await output.json({'driver': 'claude', **identity, 'contract': 2, 'stateDirectory': str(state.directory), 'settingsFile': str(file), 'tool': await inspect_tool(state.directory, settings.get('toolPath'), dict(os.environ), cancel), **({'notices': notices} if notices else {})})
+            await output.json({'driver': 'claude', **identity, 'contract': 2, 'capabilities': {'subscriptionIdentity': 1}, 'stateDirectory': str(state.directory), 'settingsFile': str(file), 'tool': await inspect_tool(state.directory, settings.get('toolPath'), dict(os.environ), cancel), **({'notices': notices} if notices else {})})
             return 0
         if command.name == 'dev probe':
             await output.json(await probe(subscriptions, dict(os.environ), cancel))
@@ -160,4 +174,9 @@ def entry(admission: Admission | None = None) -> None:
         status = 1
     except (BrokenPipeError, KeyboardInterrupt):
         status = 2
+    finally:
+        # asyncio.run has drained/cancelled all tasks, and final output and
+        # transport cleanup have completed. Close only our identity guards;
+        # the bootstrap retains component admission until this returns.
+        State.close_all()
     raise SystemExit(status)

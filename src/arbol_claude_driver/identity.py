@@ -25,6 +25,15 @@ def canonical_id(value: object) -> str:
     return value
 
 
+def parse_expected(value: str | None) -> tuple[str, str] | None:
+    if value is None:
+        return None
+    parts = value.split('.')
+    if len(value) != 87 or len(parts) != 2 or not all(valid_token(item) for item in parts):
+        raise Failure('invalid_input', 'Give --expect exactly one canonical generation.witness pair.')
+    return parts[0], parts[1]
+
+
 def unsafe() -> Failure:
     return Failure('internal', 'Driver identity state is unsafe or incomplete; preserve it for exclusive maintenance.')
 
@@ -87,15 +96,14 @@ def state_format(directory: Path) -> int | None:
         spelling = raw.decode('ascii').strip()
     except UnicodeError:
         raise unsafe() from None
-    if not re.fullmatch(r'[1-9][0-9]{0,8}', spelling, re.ASCII):
+    if not re.fullmatch(r'[1-9][0-9]*', spelling, re.ASCII):
         raise unsafe()
-    number = int(spelling)
-    if number > 2:
+    if spelling not in ('1', '2'):
         raise Failure('state_newer', 'Driver state is newer than supported format 2.',
                       {'remedy': 'Run the Build that wrote this state, or a newer one.'})
-    if number == 2:
+    if spelling == '2':
         private_file(path)
-    return number
+    return int(spelling)
 
 
 def root_identity(directory: Path) -> str:
@@ -137,11 +145,16 @@ class IdentityState:
         # guard creation. It grants no authority: format is read again under
         # the guard before any root identity or ordinary state access.
         preflight = state_format(directory)
-        if preflight is None and not qualified:
-            raise Failure('internal', 'New identity state requires qualified normal admission.')
+        if preflight != 1 and not qualified:
+            raise Failure('internal', 'Identity state requires qualified normal admission.')
         ensure_directory(directory)
         guard = directory / 'identity.guard'
-        descriptor = os.open(guard, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+        if preflight != 2:
+            flags |= os.O_CREAT
+        # A missing guard in existing format2 cannot be replaced: another
+        # invocation could still hold the unlinked inode. Preserve/refuse it.
+        descriptor = os.open(guard, flags, 0o600)
         try:
             private_file(guard)
             current = os.fstat(descriptor)
@@ -245,6 +258,28 @@ class IdentityState:
         self.require_proof()
         value = sidecar({'version': 1, 'witness': witness, 'state': state})
         publish(self.subscription(identifier) / 'identity.json', value)
+
+    def capture(self, identifier: str, expected: tuple[str, str] | None = None) -> Object:
+        """Caller holds the canonical short lock and has validated its record."""
+        generation = self.require_proof()
+        if self.read_pending(identifier) is not None:
+            raise unsafe()
+        current = self.read_sidecar(identifier)
+        if current is None or current['state'] == 'retired':
+            witness = token()
+            self.publish_sidecar(identifier, witness, 'active')
+        else:
+            witness = str(current['witness'])
+        # Re-read durable bytes before emitting any positive proof. The short
+        # lock serializes capture/compare with local create/remove settlement.
+        if self.read_sidecar(identifier) != {'version': 1, 'witness': witness, 'state': 'active'}:
+            raise unsafe()
+        self.check()
+        if expected is not None and expected != (generation, witness):
+            raise Failure('in_use', 'Subscription identity changed.',
+                          {'remedy': 'Select the Subscription again and explicitly rebind it.'})
+        return {'version': 1, 'driver': 'claude', 'subscription': canonical_id(identifier),
+                'generation': generation, 'witness': witness}
 
     def close(self) -> None:
         if not self.closed:

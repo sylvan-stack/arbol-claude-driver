@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
+from .identity import canonical_id, private_file, unsafe
 from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
 from .state import State, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
 
@@ -68,6 +69,29 @@ class Subscriptions:
         if bad:
             raise Failure('internal', f'Malformed Subscription record for {identifier}.')
         return dict(value)
+
+    async def identity(self, identifier: str, expected: tuple[str, str] | None = None) -> Record:
+        if identifier in {'zai', 'claude-zai'}:
+            raise retired_route()
+        canonical_id(identifier)
+        identity = self.state.identity
+        if identity is None:
+            raise unsafe()
+        identity.require_proof()
+        async with self.state.lock(identifier):
+            path = self.state.subscription(identifier) / 'record.json'
+            try:
+                private_file(path)
+            except FileNotFoundError:
+                if identifier != 'anthropic':
+                    raise Failure('not_found', 'Subscription was not found.') from None
+            # Only the local canonical record validator is used: no settings,
+            # progress cleanup, tool discovery, credential or vendor access.
+            await self.record(identifier)
+            result = identity.capture(identifier, expected)
+            if len(compact(result).encode('utf-8')) + 1 > 4096:
+                raise unsafe()
+            return result
 
     async def get(self, identifier: str) -> Record:
         record = await self.record(identifier)

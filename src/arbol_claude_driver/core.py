@@ -186,6 +186,7 @@ SCHEMAS: dict[str, tuple[list[str], list[str], list[str], int, int]] = {
     'subscriptions families': ([], [], [], 0, 0), 'subscriptions list': ([], [], [], 0, 0),
     'subscriptions create': (['family', 'label', 'id'], [], [], 0, 0),
     'subscriptions update': (['label'], [], [], 1, 1),
+    'subscriptions identity': (['expect'], [], [], 1, 1),
     'subscriptions remove': ([], ['force'], [], 1, 1),
     'subscriptions sign-in': ([], ['by-code'], [], 1, 1),
     'subscriptions sign-out': ([], ['force'], [], 1, 1),
