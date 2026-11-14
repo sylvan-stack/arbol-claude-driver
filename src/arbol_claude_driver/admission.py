@@ -256,6 +256,14 @@ class Admission:
     closed: bool = False
     transfers: set[str] = field(default_factory=set)
 
+    def _lease_current(self) -> None:
+        current = os.fstat(self.lease)
+        named = (self.authority.folder / 'admission.lock').lstat()
+        if (not stat.S_ISREG(current.st_mode) or current.st_uid != os.getuid()
+                or stat.S_IMODE(current.st_mode) != 0o600
+                or (current.st_dev, current.st_ino) != (named.st_dev, named.st_ino)):
+            refuse()
+
     def _check(self) -> None:
         context = self.context
         if sha256(read_bytes(self.context_file)) != self.context_digest:
@@ -282,10 +290,7 @@ class Admission:
                 or parent['payloadSha256'] != self.payload.digest
                 or {key: parent[key] for key in ('pid', 'startedAt')} != parent_identity):
             refuse()
-        named = self.authority.folder / 'admission.lock'
-        current = os.fstat(self.lease)
-        if (current.st_dev, current.st_ino) != (named.stat().st_dev, named.stat().st_ino):
-            refuse()
+        self._lease_current()
         verify_acceptance(self.authority, self.payload, context['acceptanceSha256'])
 
     @classmethod
@@ -331,7 +336,9 @@ class Admission:
             frame = {'version': 1, 'handoff': context['handoff'], 'nonce': context['nonce'],
                      'contextSha256': digest, 'challenge': challenge}
             frames.send({**frame, 'type': 'ready'})
-            if frames.receive() != {**frame, 'type': 'go'}:
+            go = frames.receive()
+            fields(go, 'version type handoff nonce contextSha256 challenge')
+            if go != {**frame, 'type': 'go'}:
                 refuse()
             with authority.mutex():
                 admission._check()
@@ -356,6 +363,10 @@ class Admission:
         if self.transfers:
             refuse()
         with self.authority.mutex():
+            self._lease_current()
+            control = self.authority.read('control')
+            if control['epoch'] != self.context['epoch'] or control['phase'] not in ('normal', 'draining'):
+                refuse()
             current = _writer(self.authority, self.context['invocation'], self.context['writer'])
             if (current['phase'] != 'active' or current['contextSha256'] != self.context_digest
                     or {key: current[key] for key in ('pid', 'startedAt')} != self.context['process']):
@@ -382,6 +393,7 @@ class Admission:
             refuse()
         handoff, child, nonce = token(), token(), token()
         with self.authority.mutex():
+            self._lease_current()
             control = self.authority.read('control')
             current = _writer(self.authority, self.context['invocation'], self.context['writer'])
             if (control['epoch'] != self.context['epoch'] or control['phase'] not in ('normal', 'draining')
@@ -473,7 +485,9 @@ class HelperHandoff:
                 validate('handoff', accepted)
                 publish(_handoff_path(parent.authority, context['handoff']), accepted)
             self.frames.send({**frame, 'type': 'go'})
-            if self.frames.receive() != {**frame, 'type': 'started'}:
+            started = self.frames.receive()
+            fields(started, 'version type handoff nonce contextSha256 challenge')
+            if started != {**frame, 'type': 'started'}:
                 refuse()
             self.frames.no_extra()
             with parent.authority.mutex():
