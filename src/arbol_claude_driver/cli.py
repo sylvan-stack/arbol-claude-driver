@@ -52,9 +52,12 @@ async def main(args: list[str], admission: Admission | None = None) -> int:
     words = [word for index, word in enumerate(args) if word != '--state-dir' and not word.startswith('--state-dir=') and (not index or args[index - 1] != '--state-dir')]
     is_run = bool(words and words[0] == 'run')
     events = RunEvents(output, '--output=text' in args or '--output' in args and args[args.index('--output') + 1:args.index('--output') + 2] == ['text']) if is_run else None
-    reader, transport = await input_stream()
+    reader = asyncio.StreamReader(limit=4 * 1024 * 1024)
+    transport: asyncio.ReadTransport | None = None
     try:
         command = parse_arguments(args)
+        if command.name != 'subscriptions identity':
+            reader, transport = await input_stream()
         if command.name == 'dev stand-in':
             # Vendor stand-ins handle signals like the vendor process itself.
             for name in [signal.SIGINT, signal.SIGTERM]:
