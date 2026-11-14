@@ -1,27 +1,44 @@
-"""Format-1 durable state and inter-process ownership."""
+"""Durable format-one/two state and historical process ownership."""
 from __future__ import annotations
 
 import asyncio
 import os
 import re
+import stat
 import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from .core import Failure, compact, epoch, fixed_wait, now, valid_date, loads
 from .models import ProcessOwner
+from .identity import IdentityState, ensure_directory
+from .identity_protocol import sync_directory
+
+if TYPE_CHECKING:
+    from .admission import Admission
 
 
 def private_directory(path: Path) -> None:
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path.chmod(0o700)
+    ensure_directory(path)
+
+
+def safe_metadata_path(path: Path) -> None:
+    if path.resolve(strict=False) != path:
+        raise Failure('internal', 'Cannot access unsafe Driver metadata.')
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+        raise Failure('internal', 'Cannot access unsafe Driver metadata.')
 
 
 def prepare_file(path: Path, content: str) -> Path:
+    safe_metadata_path(path)
     private_directory(path.parent)
     temporary = path.parent / f'.write-{uuid.uuid4()}'
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -39,6 +56,7 @@ def prepare_file(path: Path, content: str) -> Path:
 def atomic_write(path: Path, content: str) -> None:
     temporary = prepare_file(path, content)
     try:
+        safe_metadata_path(path)
         os.replace(temporary, path)
         fd = os.open(path.parent, os.O_RDONLY)
         try:
@@ -49,17 +67,38 @@ def atomic_write(path: Path, content: str) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def durable_delete(path: Path) -> None:
+    try:
+        safe_metadata_path(path)
+        path.unlink()
+        sync_directory(path.parent)
+    except FileNotFoundError:
+        pass
+
+
 def write_json(path: Path, value: Any) -> None:
     atomic_write(path, compact(value) + '\n')
 
 
 def read_json(path: Path) -> Any:
     try:
-        return loads(path.read_text())
+        safe_metadata_path(path)
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, 'r', encoding='utf-8') as handle:
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid():
+                raise Failure('internal', 'Cannot read unsafe Driver metadata.')
+            raw = handle.read()
+            after, named = os.fstat(descriptor), path.lstat()
+            if ((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) !=
+                    (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+                    or (before.st_dev, before.st_ino) != (named.st_dev, named.st_ino)):
+                raise Failure('internal', 'Driver metadata changed while being read.')
+        return loads(raw)
     except FileNotFoundError:
         return None
     except (OSError, ValueError):
-        raise Failure('internal', f'Cannot read state file {path}.') from None
+        raise Failure('internal', 'Cannot read Driver metadata.') from None
 
 
 def parse_owner(value: Any) -> ProcessOwner:
@@ -90,42 +129,43 @@ async def owner_alive(owner: ProcessOwner) -> bool:
 
 
 class State:
+    _open: ClassVar[set[State]] = set()
+
     def __init__(self, directory: str | Path):
         self.directory = Path(os.path.abspath(directory))
+        self.identity: IdentityState | None = None
 
-    def initialize(self) -> None:
-        path = self.directory / 'format'
-
-        def check() -> bool:
-            try:
-                value = path.read_text().strip()
-            except FileNotFoundError:
-                return False
-            if not re.fullmatch('[1-9][0-9]*', value):
-                raise Failure('internal', f'State format in {path} is malformed.')
-            if int(value) > 1:
-                raise Failure('state_newer', f'State format {value} is newer than supported format 1.', {'remedy': 'Run the Build that wrote this state, or a newer one.'})
-            return True
-
-        if check():
-            private_directory(self.directory)
-            path.chmod(0o600)
+    def initialize(self, admission: Admission | None = None) -> None:
+        if self.identity is not None:
+            self.identity.check()
             return
-        private_directory(self.directory)
-        temp = prepare_file(path, '1\n')
-        try:
-            try:
-                os.link(temp, path)
-            except FileExistsError:
-                pass
-        finally:
-            temp.unlink()
-        check()
+        qualified = admission is not None and not admission.closed
+        if admission is not None:
+            admission._lease_current()
+        self.identity = IdentityState.open(self.directory, qualified=qualified)
+        self._open.add(self)
+
+    def close(self) -> None:
+        if self.identity is not None:
+            self.identity.close()
+        self._open.discard(self)
+
+    @classmethod
+    def close_all(cls) -> None:
+        # The CLI calls this only after asyncio.run has drained all state tasks
+        # and completed final output, before closing component admission.
+        for state in tuple(cls._open):
+            state.close()
 
     def subscription(self, identifier: str) -> Path:
         if not re.fullmatch('[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}', identifier):
             raise Failure('invalid_input', 'The Subscription identifier is not a safe file name.')
-        return self.directory / 'subscriptions' / identifier
+        path = self.directory / 'subscriptions' / identifier
+        if path.resolve(strict=False) != path:
+            raise Failure('internal', 'Cannot access an unsafe Subscription directory.')
+        if self.identity is not None:
+            self.identity.check()
+        return path
 
     def clear_unfinished_writes(self) -> None:
         def visit(folder: Path, depth: int) -> None:
@@ -143,7 +183,7 @@ class State:
         visit(self.directory, 3)
 
     @asynccontextmanager
-    async def lock(self, identifier: str) -> AsyncIterator[None]:
+    async def lock(self, identifier: str, *, allow_pending: bool = False) -> AsyncIterator[None]:
         directory = self.subscription(identifier)
         private_directory(directory)
         path = directory / 'lock'
@@ -188,6 +228,10 @@ class State:
                     if time.monotonic() >= deadline:
                         raise Failure('internal', f'Subscription lock timed out after {fixed_wait(10000)*1000:g} milliseconds; owner PID {taken["pid"]}, started {taken["startedAt"]}.')
                     await asyncio.sleep(fixed_wait(50))
+            if self.identity is not None:
+                self.identity.check()
+                if not allow_pending and self.identity.read_pending(identifier) is not None:
+                    raise Failure('internal', 'Subscription identity settlement requires recovery under exclusive maintenance.')
             yield
         finally:
             if acquired:
