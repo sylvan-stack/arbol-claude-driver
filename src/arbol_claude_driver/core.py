@@ -8,7 +8,10 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TypeGuard, cast
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
+
+if TYPE_CHECKING:
+    from .identity_protocol import Payload
 
 from .models import DriverError, ErrorCode
 
@@ -337,7 +340,16 @@ def read_settings(file: Path) -> tuple[Record, list[Record]]:
     return settings, notices
 
 
-def build_identity(start: Path | None = None) -> Record:
+def build_identity(start: Path | None = None, *, payload: Payload | None = None) -> Record:
+    if payload is not None:
+        # Build lifecycle metadata is mutable outside the immutable payload.
+        # Identity comes from accepted D, package version from inventoried bytes.
+        value = loads((payload.root / 'package.json').read_bytes())
+        if (not isinstance(value, dict) or value.get('name') != '@sylvan-stack/arbol-claude-driver'
+                or not isinstance(value.get('version'), str)
+                or re.fullmatch(r'\d+\.\d+\.\d+(?:[-+][\w.-]+)?', value['version']) is None):
+            raise Failure('internal', 'The immutable Driver package version is invalid.')
+        return {'version': value['version'], 'build': payload.build}
     directory = (start or Path(__file__).parent).resolve()
     while True:
         build = directory / 'build.json'

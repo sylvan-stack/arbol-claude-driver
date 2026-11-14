@@ -9,8 +9,9 @@ import stat
 from pathlib import Path
 from typing import Any
 
+from .admission import Admission
 from .continuity import Runs
-from .core import Failure, build_identity, fixed_wait, parse_arguments, read_settings, safe_failure
+from .core import Failure, build_identity, compact, fixed_wait, parse_arguments, read_settings, safe_failure
 from .dev import live_check, probe
 from .processes import ACTUAL_HOME, inspect_tool
 from .protocol import Output, RunEvents
@@ -39,7 +40,9 @@ async def input_stream() -> tuple[asyncio.StreamReader, asyncio.ReadTransport | 
     return reader, transport
 
 
-async def main(args: list[str]) -> int:
+async def main(args: list[str], admission: Admission | None = None) -> int:
+    if admission is None or admission.closed:
+        raise Failure('internal', 'Driver admission is unavailable; use the qualified registered launcher.')
     cancel = asyncio.Event()
     loop = asyncio.get_running_loop()
     for name in [signal.SIGINT, signal.SIGTERM]:
@@ -63,7 +66,7 @@ async def main(args: list[str]) -> int:
         settings, notices = read_settings(file)
         state = State(str(command.options.get('state-dir', str(Path(home) / 'Library/Application Support/Arbol/drivers/claude'))))
         state.initialize()
-        identity = build_identity()
+        identity = build_identity(payload=admission.payload)
         subscriptions = Subscriptions(state, settings, notices, file)
         authenticate = Authentication(subscriptions, dict(os.environ), cancel)
         if command.name == 'run' or command.name.startswith('runs ') or command.name in {'subscriptions create', 'subscriptions update', 'subscriptions sign-in', 'subscriptions sign-out', 'subscriptions remove', 'subscriptions import', 'subscriptions check', 'subscriptions usage'}:
@@ -148,9 +151,13 @@ async def main(args: list[str]) -> int:
             signal.signal(name, signal.SIG_IGN)
 
 
-def entry() -> None:
+def entry(admission: Admission | None = None) -> None:
     try:
-        status = asyncio.run(main(sys.argv[1:]))
+        status = asyncio.run(main(sys.argv[1:], admission))
+    except Failure as error:
+        sys.stdout.write(compact({'error': safe_failure(error)}) + '\n')
+        sys.stdout.flush()
+        status = 1
     except (BrokenPipeError, KeyboardInterrupt):
         status = 2
     raise SystemExit(status)
