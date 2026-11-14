@@ -19,7 +19,7 @@ from pathlib import Path
 
 from .identity_protocol import (
     BUILD, COMPONENTS, DESCRIPTOR, LIMIT, Authority, Object, Payload, canonical,
-    canonical_uuid, decode, fields, load_payload, natural, physical, private_directory,
+    canonical_uuid, decode, fields, identity_record, load_payload, physical, private_directory, process_identity,
     publish, read, read_bytes, refuse, relative, sha256,
     token, valid_hash, valid_token, validate,
 )
@@ -51,24 +51,8 @@ def boot_uuid() -> str:
     return value
 
 
-def process_identity(pid: int) -> Object:
-    if not natural(pid, positive=True):
-        refuse()
-    result = subprocess.run(['/bin/ps', '-p', str(pid), '-o', 'lstart='], check=True,
-                            capture_output=True, timeout=5,
-                            env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'TZ': 'UTC'})
-    started = ' '.join(result.stdout.decode('ascii', 'strict').split())
-    if not started or len(started) > 128:
-        refuse()
-    return {'pid': pid, 'startedAt': started}
-
-
 def _identity(value: object) -> Object:
-    if (not isinstance(value, dict) or set(value) != {'pid', 'startedAt'}
-            or not natural(value['pid'], positive=True) or not isinstance(value['startedAt'], str)
-            or not value['startedAt'] or len(value['startedAt']) > 128):
-        refuse()
-    return value
+    return identity_record(value)
 
 
 def normal_context(value: Object) -> None:
