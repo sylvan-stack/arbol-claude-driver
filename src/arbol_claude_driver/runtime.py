@@ -343,8 +343,9 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             await asyncio.gather(control_task, return_exceptions=True)
         if request.get('workingDirectory') is None and plan.get('syntheticFile'):
             await chats.discard_synthetic(plan, request)
-        if runs.owns(record):
-            shutil.rmtree(temp, ignore_errors=True)
+        async with subscriptions.state.lock(request['subscriptionId'], allow_pending=True):
+            if runs.owns(record):
+                shutil.rmtree(temp, ignore_errors=True)
     cancelled |= cancel.is_set()
     try:
         await subscriptions.run_report(initial, redact(error.result if isinstance(error, Failure) else None, events.secrets), redact(last_usage, events.secrets), lifetime=lifetime)
