@@ -16,11 +16,13 @@ from .admission import (
     descriptor_number, verify_acceptance,
 )
 from .core import Command, Failure
-from .identity import canonical_id, pending, sidecar
+from .identity import canonical_id, pending, private_file, root_identity, sidecar, state_format
 from .identity_protocol import (
     Authority, MANIFEST_LIMIT, MAX_ENTRIES, Object, Payload, canonical, canonical_uuid, decode, fields, natural, physical, private_directory,
-    publish, publish_bytes, read, read_bytes, refuse, sha256, sync_directory, valid_hash, valid_token, validate,
+    publish, publish_bytes, read, read_bytes, refuse, remove, sha256, sync_directory, valid_hash, valid_token, validate,
 )
+
+from .state import owner_alive, parse_owner, prepare_file
 
 OPERATIONS = ('upgrade', 'identity-reset', 'restore', 'identity-recover')
 
@@ -300,6 +302,7 @@ class Maintenance:
     descriptor: int
     command: Command
     closed: bool = False
+    guard: int | None = None
 
     @classmethod
     def receive(cls, payload: Payload, command: Command, environment: dict[str, str]) -> Maintenance:
@@ -393,6 +396,12 @@ class Maintenance:
     def check(self) -> None:
         with self.authority.mutex():
             self.check_locked()
+        if self.guard is not None:
+            path = Path(str(self.command.options['state-dir'])) / 'identity.guard'
+            private_file(path)
+            current, named = os.fstat(self.guard), path.lstat()
+            if (current.st_dev, current.st_ino) != (named.st_dev, named.st_ino):
+                refuse()
 
     def begin_attempt(self) -> tuple[Archive, Object, Archive | None]:
         self.check()
@@ -441,13 +450,136 @@ class Maintenance:
             publish(path, marker)
         return before, marker, source
 
+    def acquire_guard(self) -> Path:
+        self.check()
+        directory = private_directory(physical(str(self.command.options['state-dir'])))
+        try:
+            number = state_format(directory)
+        except Failure as error:
+            if self.context['operation'] != 'restore' or error.result['code'] == 'state_newer':
+                raise
+            number = None
+        if number is None and self.context['operation'] != 'restore':
+            raise Failure('invalid_input', 'Maintenance requires existing supported Driver state.')
+        if self.guard is None:
+            path = directory / 'identity.guard'
+            flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+            if number == 1 or self.context['operation'] == 'restore':
+                flags |= os.O_CREAT
+            descriptor = os.open(path, flags, 0o600)
+            try:
+                private_file(path)
+                current, named = os.fstat(descriptor), path.lstat()
+                if (current.st_dev, current.st_ino) != (named.st_dev, named.st_ino):
+                    refuse()
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                os.set_inheritable(descriptor, False)
+                os.fsync(descriptor)
+                sync_directory(directory)
+                self.guard = descriptor
+            except BaseException:
+                os.close(descriptor)
+                raise
+        self.check()
+        return directory
+
+    async def validate_records(self, directory: Path) -> None:
+        # No account record, native home, credential, settings or chat bytes
+        # are read. Only private record-file metadata and owned-work records.
+        metadata_names(directory)
+        subscriptions = directory / 'subscriptions'
+        work: list[Path] = []
+        if subscriptions.exists():
+            for folder in subscriptions.iterdir():
+                record = folder / 'record.json'
+                if os.path.lexists(record):
+                    private_file(record)
+                progress = folder / 'sign-in.json'
+                if os.path.lexists(progress):
+                    work.append(progress)
+                for name in ('identity.json', 'identity-pending.json'):
+                    path = folder / name
+                    if os.path.lexists(path):
+                        if name == 'identity-pending.json':
+                            pending(read(path))
+                            raise Failure('internal', 'Subscription identity settlement must be recovered before this operation.')
+                        sidecar(read(path))
+        runs = directory / 'runs'
+        if os.path.lexists(runs):
+            private_directory(runs)
+            work.extend(path for path in runs.iterdir() if path.suffix == '.json' and not path.name.startswith('.'))
+        if len(work) > MAX_ENTRIES:
+            refuse()
+        for path in work:
+            value = decode(read_bytes(path, limit=MANIFEST_LIMIT), limit=MANIFEST_LIMIT, exact=False)
+            if 'owner' not in value:
+                refuse()
+            for key in ('owner', 'tool', 'cleanupOwner'):
+                if key in value and await owner_alive(parse_owner(value[key])):
+                    raise Failure('in_use', 'Driver state still records active owned work; finish its verified cleanup first.')
+
+    def complete(self, directory: Path, marker: Object) -> Object:
+        self.check()
+        if state_format(directory) != 2 or root_identity(directory) != self.context['generation']:
+            refuse()
+        if (directory / 'identity-upgrade.json').exists():
+            refuse()
+        current = local_marker(read(directory / 'identity-maintenance.json'))
+        if current not in (marker, {**marker, 'phase': 'complete'}):
+            refuse()
+        publish(directory / 'identity-maintenance.json', {**marker, 'phase': 'complete'})
+        # Leaf16 adds the exact external maintenance result tuple after all
+        # four operation implementations exist. No acceptance is issued here.
+        return {'version': 1, 'format': 2, 'generation': self.context['generation']}
+
+    def convert(self, directory: Path, archive: Archive, backup: Path) -> None:
+        journal_path = directory / 'identity-upgrade.json'
+        expected = {'version': 1, 'from': 1, 'to': 2, 'generation': self.context['generation'],
+                    'backup': str(backup), 'backupSha256': archive.digest}
+        if journal_path.exists():
+            journal = read(journal_path)
+            fields(journal, 'version from to generation backup backupSha256')
+            if journal != expected or type(journal['from']) is not int or type(journal['to']) is not int:
+                refuse()
+        else:
+            if state_format(directory) != 1:
+                raise Failure('invalid_input', 'Upgrade requires format 1 or its exact pending conversion journal.')
+        # Stage the root and fsync it before the durable format fence.
+        staged = prepare_file(directory / 'identity.json', canonical({'version': 1, 'generation': self.context['generation']}).decode())
+        try:
+            publish(journal_path, expected)
+            publish_bytes(directory / 'format', b'2\n')
+            os.replace(staged, directory / 'identity.json')
+            sync_directory(directory)
+            remove(journal_path)
+        finally:
+            staged.unlink(missing_ok=True)
+
+    async def upgrade(self, directory: Path, before: Archive, marker: Object) -> Object:
+        await self.validate_records(directory)
+        number = state_format(directory)
+        if number == 2 and not (directory / 'identity-upgrade.json').exists():
+            if root_identity(directory) != self.context['generation']:
+                refuse()
+            return self.complete(directory, marker)
+        if before.manifest['format'] != 1:
+            raise Failure('invalid_input', 'The original upgrade before image must be format 1.')
+        self.convert(directory, before, Path(str(self.command.options['backup'])))
+        await self.validate_records(directory)
+        return self.complete(directory, marker)
+
     async def execute(self) -> Object:
         self.check()
-        # Exact operation implementations follow as separately owned leaves;
-        # this reserved dispatch never falls back to ordinary state admission.
-        raise Failure('unsupported', 'This maintenance operation is not available in this source checkpoint.')
+        if self.context['operation'] != 'upgrade':
+            raise Failure('unsupported', 'This maintenance operation is not available in this source checkpoint.')
+        directory = self.acquire_guard()
+        before, marker, _ = self.begin_attempt()
+        return await self.upgrade(directory, before, marker)
 
     def finish(self) -> None:
         if not self.closed:
+            if self.guard is not None:
+                os.close(self.guard)
+                self.guard = None
             os.close(self.descriptor)
             self.closed = True
