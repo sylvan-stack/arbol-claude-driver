@@ -1406,33 +1406,76 @@ class TerminalCloseScope:
     def _close(self, fd: int) -> None:
         if type(fd) is not int or fd != self.saved_fd:
             return self.real_close(fd)
-        require(self.finish_may_have_begun and not self.intercepted and os.getpid() == self.saved_pid
-                and threading.get_ident() == self.saved_thread and self._original_lease() == self.saved_identity
-                and sys._getframe(1).f_code is self.finish_code
-                and sys._getframe(1).f_locals.get("self") is self.admission,
-                "Original-close interception identity/source/thread is unavailable.")
-        self.intercepted = True
+        earlier_error = self.actual_error
+        observation_error: BaseException | None = None
+        mismatch_error: BaseException | None = None
         stop_error: BaseException | None = None
+        restore_error: BaseException | None = None
+        exact = False
         try:
-            os.kill(self.saved_pid, signal.SIGSTOP)
-        except BaseException as error:
-            stop_error = error
+            # The unconditional original-close boundary is established BEFORE
+            # any saved-description/source/thread observation can refuse/raise.
+            try:
+                exact = (self.finish_may_have_begun and self.armed and self.actual_error is None
+                         and not self.intercepted and os.getpid() == self.saved_pid
+                         and threading.get_ident() == self.saved_thread
+                         and self._original_lease() == self.saved_identity
+                         and sys._getframe(1).f_code is self.finish_code
+                         and sys._getframe(1).f_locals.get("self") is self.admission)
+            except BaseException as error:
+                observation_error = error
+                if self.actual_error is None:
+                    self.actual_error = error
+                else:
+                    self.actual_error.add_note(f"Close observation also failed: {error!r}.")
+            if not exact and observation_error is None:
+                mismatch_error = SpanFailure("Original-close identity/source/thread observation differs.")
+                if self.actual_error is None:
+                    self.actual_error = mismatch_error
+                else:
+                    self.actual_error.add_note(f"Close observation also differs: {mismatch_error!r}.")
+            if exact:
+                self.intercepted = True
+                try:
+                    os.kill(self.saved_pid, signal.SIGSTOP)
+                except BaseException as error:
+                    stop_error = error
+                    self.actual_error = error
         finally:
-            # No State, metadata, report, notification or application output.
-            # Real original close runs exactly once, including STOP failure.
+            # Also covers observation mismatch/error and STOP cancellation.
+            # No State, metadata, reports, output, foreign unlock or retries.
             try:
                 os.close = self.real_close
+            except BaseException as error:
+                restore_error = error
+                if self.actual_error is None:
+                    self.actual_error = error
+                else:
+                    self.actual_error.add_note(f"Hook restoration also failed: {error!r}.")
             finally:
                 self.close_attempted = True
                 try:
                     self.real_close(fd)
                     self.close_returned = True
                 except BaseException as close_error:
-                    if stop_error is not None:
-                        close_error.add_note(f"Self-STOP also failed: {stop_error!r}.")
-                    raise
+                    for label, prior in (("Earlier fixture", earlier_error),
+                                         ("Close observation", observation_error or mismatch_error),
+                                         ("Self-STOP", stop_error), ("Hook restoration", restore_error)):
+                        if prior is not None:
+                            close_error.add_note(f"{label} also failed: {prior!r}.")
+                    self.actual_error = close_error
+                    raise  # The genuine close exception/type remains primary.
+        if restore_error is not None:
+            for label, prior in (("Close observation", observation_error or mismatch_error), ("Self-STOP", stop_error)):
+                if prior is not None:
+                    restore_error.add_note(f"{label} also failed: {prior!r}.")
+            raise restore_error
         if stop_error is not None:
             raise stop_error
+        if observation_error is not None:
+            raise observation_error
+        # A false observation delegates the actual close result unchanged. Its
+        # separately retained fixture error prevents a successful scope result.
 
     def __exit__(self, kind: type[BaseException] | None, error: BaseException | None,
                  trace: TracebackType | None) -> Literal[False]:
@@ -1464,9 +1507,12 @@ class TerminalCloseScope:
             require(not self.finish_called, "Terminal scope cannot finish twice.")
             self.finish_called = True
             self.admission.finish()
-            if error is None and self.intercepted and self.close_attempted and self.close_returned and self.admission.closed:
+            if (error is None and self.actual_error is None and self.intercepted
+                    and self.close_attempted and self.close_returned and self.admission.closed):
                 status = 0
         except BaseException as actual_error:
+            if self.actual_error is not None and self.actual_error is not actual_error:
+                actual_error.add_note(f"Earlier fixture observation also failed: {self.actual_error!r}.")
             self.actual_error = actual_error
         finally:
             if os.close is self.wrapper:
