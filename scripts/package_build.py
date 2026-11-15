@@ -19,6 +19,10 @@ from driver_payload import canonical, emit, freeze, publish  # noqa: E402
 from build_support import COMPONENT, ENTRY, ROOT, build_folder, digest, metadata, source_provenance, target, committed_source  # noqa: E402
 
 
+# Exact reserved entries; ABR-38 owns body admission before executable use.
+HELPERS = ['bin/entry.py', 'bin/metadata-helper.py', 'scripts/check_build.py', 'tests/identity_actor.py']
+
+
 def archive(distribution: dict[str, Any]) -> Path:
     checksum = distribution.get("sha256")
     url = distribution.get("url")
@@ -116,7 +120,7 @@ def package(candidate: str | None) -> Path:
     roots = ['runtime/python/lib/python3.14', 'runtime/python/lib/python3.14/lib-dynload', 'src']
     declaration = emit(payload, component=COMPONENT, build=number, commit=str(provenance['commit']), tree=str(provenance['tree']),
                        interpreter='runtime/python/bin/python3.14', entry='bin/entry.py',
-                       helpers=['bin/metadata-helper.py'], import_roots=roots)
+                       helpers=HELPERS, import_roots=roots)
     aliases = ('runtime', 'src', 'tests', 'test', 'scripts', 'bin', 'package.json', 'pyproject.toml',
                '.python-version', 'uv.lock', 'README.md', 'package-manifest.json')
     for name in aliases:
