@@ -568,13 +568,38 @@ class Maintenance:
         await self.validate_records(directory)
         return self.complete(directory, marker)
 
+    async def reset(self, directory: Path, before: Archive, marker: Object) -> Object:
+        if before.manifest['format'] != 2 or state_format(directory) != 2:
+            raise Failure('invalid_input', 'Identity reset requires valid format 2; upgrade format 1 first.')
+        original = before.content('identity.json')
+        if original is None:
+            refuse()
+        identity = decode(original)
+        fields(identity, 'version generation')
+        if not valid_token(identity['generation']) or identity['generation'] == self.context['generation']:
+            refuse()
+        await self.validate_records(directory)
+        current = root_identity(directory)
+        if current not in (identity['generation'], self.context['generation']):
+            refuse()
+        publish(directory / 'identity.json', {'version': 1, 'generation': self.context['generation']})
+        return self.complete(directory, marker)
+
     async def execute(self) -> Object:
         self.check()
-        if self.context['operation'] != 'upgrade':
+        operation = self.context['operation']
+        if operation not in ('upgrade', 'identity-reset'):
             raise Failure('unsupported', 'This maintenance operation is not available in this source checkpoint.')
         directory = self.acquire_guard()
+        if operation == 'identity-reset' and state_format(directory) != 2:
+            raise Failure('invalid_input', 'Identity reset requires valid format 2; upgrade format 1 first.')
+        if operation == 'upgrade' and state_format(directory) == 2 and not (directory / 'identity-upgrade.json').exists():
+            if root_identity(directory) != self.context['generation']:
+                refuse()
         before, marker, _ = self.begin_attempt()
-        return await self.upgrade(directory, before, marker)
+        if operation == 'upgrade':
+            return await self.upgrade(directory, before, marker)
+        return await self.reset(directory, before, marker)
 
     def finish(self) -> None:
         if not self.closed:
