@@ -5,6 +5,7 @@ handshake. EOF, dead parents and closed leases never erase unknown custody.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import platform
 import pwd
@@ -380,6 +381,50 @@ class Admission:
         os.close(self.lease)
         self.closed = True
 
+    async def spawn_helper_async(
+        self, arguments: list[str], *, entry: str, environment: dict[str, str], cwd: Path,
+        limit: int = 4 * 1024 * 1024,
+    ) -> asyncio.subprocess.Process:
+        """Reuse the one-use ticket; preserve caller streams and new session."""
+        if type(limit) is not int or limit <= 0:
+            refuse()
+        ticket = self.prepare_helper(entry)
+        spawning: asyncio.Task[asyncio.subprocess.Process] | None = None
+        handshake: asyncio.Task[None] | None = None
+        child: asyncio.subprocess.Process | None = None
+        try:
+            spawning = asyncio.create_task(asyncio.create_subprocess_exec(
+                *ticket.prefix, *arguments, env=ticket.environment(environment), cwd=cwd,
+                pass_fds=ticket.pass_fds, close_fds=True, start_new_session=True,
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                limit=limit,
+            ))
+            child = await asyncio.shield(spawning)
+            handshake = asyncio.create_task(asyncio.to_thread(ticket.acknowledge, child.pid))
+            await asyncio.shield(handshake)
+            return child
+        except BaseException:
+            if child is None and spawning is not None:
+                try:
+                    child = await _join_owned(spawning)
+                except BaseException:
+                    pass
+            if handshake is not None:
+                try:
+                    await _join_owned(handshake)
+                except BaseException:
+                    pass
+            if child is not None:
+                try:
+                    await _join_owned(asyncio.create_task(_close_development_child(child)))
+                except BaseException:
+                    pass  # Retain the original failure and unresolved custody.
+            raise
+        finally:
+            # No task/thread can still publish a registry effect at this point.
+            ticket.child_socket.close()
+            ticket.frames.close()
+
     def prepare_helper(self, entry: str) -> HelperHandoff:
         """Preregister while admitted; the caller must spawn only this immutable helper."""
         if self.closed or entry not in self.payload.descriptor['helpers']:
@@ -493,3 +538,26 @@ class HelperHandoff:
             self.completed = True
         finally:
             self.frames.close()
+
+
+async def _join_owned[T](task: asyncio.Task[T]) -> T:
+    """Join an owned bounded task despite repeated caller cancellation."""
+    while True:
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            if task.done():
+                return task.result()
+
+
+async def _close_development_child(child: asyncio.subprocess.Process) -> None:
+    """The existing development new-session kill/wait/pipe cleanup boundary."""
+    import signal
+
+    from .processes import close_pipes, kill_group, wait_exit
+
+    try:
+        kill_group(child.pid, signal.SIGKILL)
+        await wait_exit(child, 2)
+    finally:
+        close_pipes(child)
