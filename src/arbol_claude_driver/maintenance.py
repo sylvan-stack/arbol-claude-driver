@@ -208,16 +208,32 @@ def local_marker(value: Object) -> Object:
     return value
 
 
+def snapshot_bytes(directory: Path, name: str, *, limit: int) -> bytes | None:
+    """Preserve source-only metadata absence without materializing its parents."""
+    metadata_name(name)
+    current = private_directory(directory)
+    for part in name.split('/')[:-1]:
+        current /= part
+        try:
+            current.lstat()
+        except FileNotFoundError:
+            return None
+        private_directory(current)
+    path = directory / name
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return None
+    # The bounded reader still rejects unsafe, changed or disappearing files.
+    return read_bytes(path, limit=limit)
+
+
 def snapshot(directory: Path, names: list[str]) -> tuple[Object, dict[str, bytes | None]]:
     data: dict[str, bytes | None] = {}
     size = 0
     rows: list[Object] = []
     for name in names:
-        metadata_name(name)
-        try:
-            content = read_bytes(directory / name, limit=MANIFEST_LIMIT - size)
-        except FileNotFoundError:
-            content = None
+        content = snapshot_bytes(directory, name, limit=MANIFEST_LIMIT - size)
         data[name] = content
         size += len(content) if content is not None else 0
         rows.append({'path': name, 'present': content is not None, 'size': len(content) if content is not None else 0,
