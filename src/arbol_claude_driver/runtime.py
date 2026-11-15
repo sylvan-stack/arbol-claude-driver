@@ -24,13 +24,15 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
     def identity(identifier: str, labels: Record | None) -> None:
         events.run_id, events.labels = identifier, labels
     request = (await read_request(command, subscriptions.settings, input_reader.readline, identity)).record()
-    initial = await subscriptions.require_signed_in(request['subscriptionId'])
+    initial, lifetime = await subscriptions.snapshot(request['subscriptionId'])
+    if initial['state'] != 'signed_in':
+        raise Failure('not_signed_in', 'Sign in to this Subscription first.', {'remedy': 'Sign in.'})
     tool = await inspect_tool(subscriptions.state.directory, subscriptions.settings.get('toolPath'), env, cancel)
     program = require_tool(tool)
     key = None
     runs, chats = Runs(subscriptions.state), Chats(subscriptions.state)
     home = subscriptions.folder(initial['id'])
-    plan, record = await chats.reserve(request, runs, home)
+    plan, record = await chats.reserve(request, runs, home, lifetime=lifetime)
     fingerprint = MessageDigest()
     for item in request['history']:
         fingerprint.add(item)
@@ -92,7 +94,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         if request.get('workingDirectory') is None:
             private_directory(Path(cwd))
         # The subscription's clean environment excludes inherited Arbol identity.
-        child_env = await subscriptions.environment(initial['id'], env, key)
+        child_env = await subscriptions.environment(initial['id'], env, key, lifetime=lifetime)
         if request.get('arbolChat') is True:
             child_env['ARBOL_CHAT'] = request['chatSessionId']
         # In ~/.claude the tool reads the owner's MCP servers itself; only a test home needs them passed (CLD-3.20, CLD-D20).
@@ -101,7 +103,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         child_env.update(CLAUDE_CODE_SHELL=str(shell), CLAUDE_CODE_DISABLE_AUTO_MEMORY='1', BASH_DEFAULT_TIMEOUT_MS='300000', BASH_MAX_TIMEOUT_MS='1800000', CLAUDE_CODE_MAX_RETRIES='3')
         if request['searchPath']:
             child_env['PATH'] = child_env.get('PATH', '') + os.pathsep + os.pathsep.join(request['searchPath'])
-        chats.prepare(plan, request, home, cwd)
+        await chats.prepare(plan, request, home, cwd)
         for attempt in range(2):
             child = await spawn(str(launcher), [program, *run_arguments(request, plan['conversation'], command.options.get('control') is True, plan['resume']), *owner_args], child_env, cwd)
             assert child.stdin and child.stdout and child.stderr
@@ -210,7 +212,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
                 owner = await process_owner(child.pid)
                 if owner:
                     record['tool'] = owner
-                    runs.save(record)
+                    await runs.save(record)
                 await send({'type': 'control_request', 'request_id': initialize_id, 'request': {'subtype': 'initialize'}})
                 while line := await child.stdout.readline():
                     life()
@@ -262,7 +264,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
                     if protocol.error and protocol.error.result['code'] == 'credential_rejected':
                         error = error or protocol.error
                         stop_event.set()
-                        await subscriptions.run_report(initial, redact(protocol.error.result, events.secrets), redact(protocol.last_usage, events.secrets))
+                        await subscriptions.run_report(initial, redact(protocol.error.result, events.secrets), redact(protocol.last_usage, events.secrets), lifetime=lifetime)
                     if isinstance(value, dict) and value.get('type') == 'result' and protocol.result and (not protocol.background or protocol.error):
                         settled = True
                         child.stdin.close()
@@ -327,7 +329,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
                 plan.setdefault('rebuildReason', 'resume_refused')
                 record['conversation'] = plan['conversation']
                 record.pop('tool', None)
-                runs.save(record)
+                await runs.save(record)
                 continue
             if resume_refused and error is None:
                 error = Failure('tool_failed', 'Claude refused the conversation.')
@@ -340,11 +342,12 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             control_task.cancel()
             await asyncio.gather(control_task, return_exceptions=True)
         if request.get('workingDirectory') is None and plan.get('syntheticFile'):
-            Path(plan['syntheticFile']).unlink(missing_ok=True)
-        shutil.rmtree(temp, ignore_errors=True)
+            await chats.discard_synthetic(plan, request)
+        if runs.owns(record):
+            shutil.rmtree(temp, ignore_errors=True)
     cancelled |= cancel.is_set()
     try:
-        await subscriptions.run_report(initial, redact(error.result if isinstance(error, Failure) else None, events.secrets), redact(last_usage, events.secrets))
+        await subscriptions.run_report(initial, redact(error.result if isinstance(error, Failure) else None, events.secrets), redact(last_usage, events.secrets), lifetime=lifetime)
         await chats.settle(request, plan, fingerprint.snapshot(), error is None and not cancelled, home)
     except BaseException as failure:
         error = error or failure
@@ -356,4 +359,4 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         await chats.settle(request, {**plan, 'continuedConversation': plan['conversation']}, fingerprint.snapshot(), False, home)
         return 2 if cancel.is_set() else 1
     finally:
-        runs.remove(request['runId'])
+        await runs.remove(request['runId'], record)
