@@ -18,7 +18,7 @@ from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
 from .identity import canonical_id, private_file, unsafe
-from .identity_protocol import sync_directory, token
+from .identity_protocol import sync_directory, token, valid_token
 from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
 from .state import State, durable_delete, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
 
@@ -104,7 +104,10 @@ class Subscriptions:
         if progress is not None:
             if not isinstance(progress, dict) or not valid_date(progress.get('expiresAt')):
                 raise Failure('internal', 'Malformed sign-in record.')
-            if progress.get('operation', 'sign_in') == 'sign_in' and await owner_alive(parse_owner(progress.get('owner'))):
+            if 'attempt' in progress and not valid_token(progress['attempt']):
+                raise Failure('internal', 'Malformed sign-in attempt.')
+            current_lifetime = self.state.identity is None or self.matches(identifier, progress.get('identity'))
+            if current_lifetime and progress.get('operation', 'sign_in') == 'sign_in' and await owner_alive(parse_owner(progress.get('owner'))):
                 result['state'] = 'signing_in'
                 result.pop('problem', None)
         return result
@@ -420,6 +423,8 @@ class Authentication:
         if not isinstance(value, dict) or not valid_date(value.get('expiresAt')) or value.get('operation', 'sign_in') not in {'sign_in', 'sign_out', 'remove'} or value.get('stopReason', 'replaced') not in {'replaced', 'signed_out'}:
             raise Failure('internal', 'Malformed sign-in record.')
         parse_owner(value.get('owner'))
+        if 'attempt' in value and not valid_token(value['attempt']):
+            raise Failure('internal', 'Malformed sign-in attempt.')
         if 'tool' in value:
             parse_owner(value['tool'])
         return dict(value)
@@ -432,7 +437,7 @@ class Authentication:
         async with self.subscriptions.mutation(identifier):
             await self.subscriptions.record(identifier)
             progress = self.progress(identifier)
-            if not progress or not self.subscriptions.matches(identifier, progress.get('identity')):
+            if not progress:
                 return
         if await owner_alive(progress['owner']):
             return
@@ -440,8 +445,11 @@ class Authentication:
             kill_group(progress['tool']['pid'], signal.SIGKILL)
         async with self.subscriptions.state.lock(identifier, allow_pending=True):
             current = self.progress(identifier)
-            if self.same_progress(current, progress) and self.subscriptions.matches(identifier, progress.get('identity')):
-                shutil.rmtree(self.temporary(identifier), ignore_errors=True)
+            if self.same_progress(current, progress):
+                if self.subscriptions.matches(identifier, progress.get('identity')):
+                    shutil.rmtree(self.temporary(identifier), ignore_errors=True)
+                # Reap only this exact dead old progress slot, never its account
+                # record or a newer lifetime's temporary/native files.
                 durable_delete(self.path(identifier))
 
     async def clean_all_progress(self) -> None:
