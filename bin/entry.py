@@ -65,22 +65,32 @@ def bootstrap() -> None:
                 or Path(sys.executable).resolve(strict=True) != payload.root / payload.descriptor['interpreter']
                 or sys.path != [str(payload.root / name) for name in payload.descriptor['importRoots']]):
             refuse()
-        # The administrative consumer is introduced in leaf10. Until then the
-        # reserved protocol refuses here, before importing the ordinary CLI.
+        from arbol_claude_driver.maintenance import Maintenance
+        from arbol_claude_driver.core import Failure, compact, safe_failure
+        admission: Admission | Maintenance
         if any(key in os.environ for key in (MAINTENANCE_FD, MAINTENANCE_CONTEXT)):
-            refuse()
-        admission = Admission.receive(payload, entry, dict(os.environ))
-        if admission.context['role'] != 'main':
-            refuse()
+            from arbol_claude_driver.core import parse_arguments
+            admission = Maintenance.receive(payload, parse_arguments(sys.argv[1:]), dict(os.environ))
+        else:
+            admission = Admission.receive(payload, entry, dict(os.environ))
+            if admission.context['role'] != 'main':
+                refuse()
         # Keep the caller's vendor environment, remove only admission authority.
         # The admitted object, never a fresh environment lookup, owns cleanup.
         for key in AUTHORITY_ENV:
             os.environ.pop(key, None)
-    except (Exception, KeyboardInterrupt):
+    except (Exception, KeyboardInterrupt) as error:
+        if 'Failure' in locals() and isinstance(error, Failure):
+            sys.stdout.write(compact({'error': safe_failure(error)}) + '\n')
+            sys.stdout.flush()
+            raise SystemExit(1) from None
         _refuse()
     try:
-        from arbol_claude_driver.cli import entry as command_entry
-        command_entry(admission)
+        from arbol_claude_driver.cli import administrative_entry, entry as command_entry
+        if isinstance(admission, Admission):
+            command_entry(admission)
+        else:
+            administrative_entry(admission)
     finally:
         try:
             admission.finish()

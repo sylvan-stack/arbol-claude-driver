@@ -181,6 +181,10 @@ class Command:
 
 SCHEMAS: dict[str, tuple[list[str], list[str], list[str], int, int]] = {
     'info': ([], [], [], 0, 0),
+    'state upgrade': (['from-format', 'maintenance', 'backup'], ['confirm-quiescent'], [], 0, 0),
+    'state identity-reset': (['maintenance', 'backup'], ['confirm-quiescent'], [], 0, 0),
+    'state restore': (['source', 'maintenance', 'backup'], ['confirm-quiescent'], [], 0, 0),
+    'state identity-recover': (['subscription', 'maintenance', 'backup'], ['retire', 'confirm-quiescent'], [], 0, 0),
     'run': ('request subscription model effort service-tier system-prompt-file cwd tools chat-session run-id output'.split(), ['control'], ['add-dir', 'label'], 0, 1),
     'runs list': ([], [], [], 0, 0), 'runs stop': ([], [], [], 1, 1),
     'subscriptions families': ([], [], [], 0, 0), 'subscriptions list': ([], [], [], 0, 0),
@@ -220,7 +224,7 @@ def parse_arguments(args: list[str]) -> Command:
     if not words:
         raise Failure('invalid_input', 'Name a command, such as info.')
     first = words.pop(0)
-    name = first + ' ' + (words.pop(0) if words else '') if first in {'subscriptions', 'runs', 'dev'} else first
+    name = first + ' ' + (words.pop(0) if words else '') if first in {'subscriptions', 'runs', 'dev', 'state'} else first
     if name == 'dev stand-in':
         if len(words) < 2 or words[1] != '--':
             raise Failure('invalid_input', 'Use dev stand-in <folder> -- <arguments>.')

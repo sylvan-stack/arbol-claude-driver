@@ -7,7 +7,10 @@ import signal
 import sys
 import stat
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .maintenance import Maintenance
 
 from .admission import Admission
 from .continuity import Runs
@@ -56,6 +59,8 @@ async def main(args: list[str], admission: Admission | None = None) -> int:
     transport: asyncio.ReadTransport | None = None
     try:
         command = parse_arguments(args)
+        if command.name.startswith('state '):
+            raise Failure('invalid_input', 'State maintenance requires the exclusive registered driver-state route.')
         if command.name != 'subscriptions identity':
             reader, transport = await input_stream()
         if command.name == 'dev stand-in':
@@ -182,4 +187,21 @@ def entry(admission: Admission | None = None) -> None:
         # transport cleanup have completed. Close only our identity guards;
         # the bootstrap retains component admission until this returns.
         State.close_all()
+    raise SystemExit(status)
+
+
+def administrative_entry(admission: Maintenance) -> None:
+    from .identity_protocol import LIMIT, canonical
+    try:
+        result = asyncio.run(admission.execute())
+        raw = canonical(result)
+        if len(raw) > LIMIT:
+            raise Failure('internal', 'Maintenance result exceeds its bound.')
+        sys.stdout.buffer.write(raw)
+        sys.stdout.buffer.flush()
+        status = 0
+    except Exception as error:
+        sys.stdout.write(compact({'error': safe_failure(error)}) + '\n')
+        sys.stdout.flush()
+        status = 1
     raise SystemExit(status)
