@@ -11,14 +11,16 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
 from .identity import canonical_id, private_file, unsafe
+from .identity_protocol import sync_directory, token
 from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
-from .state import State, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
+from .state import State, durable_delete, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
 
 FAMILIES: list[Record] = [
     {'id': 'anthropic', 'label': 'Anthropic', 'auth': 'vendor_login', 'settings': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
@@ -117,6 +119,35 @@ class Subscriptions:
                     ids.append(entry.name)
         return [await self.get(identifier) for identifier in ids]
 
+    async def settle_local(self, identifier: str) -> None:
+        """Only under the canonical short lock; no vendor/native cleanup here."""
+        identity = self.state.identity
+        if identity is None or identity.format != 2:
+            return
+        journal = identity.read_pending(identifier)
+        if journal is None:
+            return
+        if journal['operation'] == 'remove':
+            if journal['phase'] != 'committed':
+                raise unsafe()  # Missing owner/cleanup proof never reactivates it.
+            identity.finish_remove(identifier, journal['witness'])
+            return
+        present = read_json(self.state.subscription(identifier) / 'record.json') is not None
+        if present:
+            await self.record(identifier)
+            identity.finish_create(identifier, journal['witness'])
+        elif journal['phase'] == 'prepared':
+            identity.publish_sidecar(identifier, journal['witness'], 'retired')
+            identity.clear_journal(identifier)
+        else:
+            raise unsafe()
+
+    @asynccontextmanager
+    async def mutation(self, identifier: str) -> AsyncIterator[None]:
+        async with self.state.lock(identifier, allow_pending=True):
+            await self.settle_local(identifier)
+            yield
+
     async def create(self, family: str, label: str, explicit: str | None = None) -> Record:
         family_id(family)
         if explicit in {'zai', 'claude-zai'}:
@@ -127,14 +158,20 @@ class Subscriptions:
         while True:
             identifier = explicit or f'{family}-{count}'
             family_settings(family, self.defaults(identifier).get('settings', {}), f'{self.settings_file}: subscriptions.{identifier}.settings.', [])
-            async with self.state.lock(identifier):
+            async with self.mutation(identifier):
                 folder = self.state.subscription(identifier)
                 if identifier != 'anthropic' and read_json(folder / 'record.json') is None and read_json(folder / 'sign-in.json') is None:
                     timestamp = now()
                     if is_test(identifier):
                         private_directory(folder / 'home')
                         owner_skills(folder / 'home', str(self.settings_file.parent.parent))
+                    identity = self.state.identity
+                    witness = token() if identity is not None and identity.format == 2 else None
+                    if witness is not None and identity is not None:
+                        identity.journal(identifier, 'create', witness)
                     write_json(folder / 'record.json', {'id': identifier, 'family': family, 'label': label, 'auth': 'vendor_login' if family == 'anthropic' else 'key', 'state': 'signed_out', 'createdAt': timestamp, 'updatedAt': timestamp})
+                    if witness is not None and identity is not None:
+                        identity.finish_create(identifier, witness)
                     break
             if explicit is not None:
                 raise Failure('in_use', 'That Subscription identifier already exists.')
@@ -146,7 +183,7 @@ class Subscriptions:
         if label is not None:
             if not label:
                 raise Failure('invalid_input', 'Give the Subscription a non-empty label.')
-            async with self.state.lock(identifier):
+            async with self.mutation(identifier):
                 record = await self.record(identifier)
                 if is_test(identifier):
                     home = self.folder(identifier)
@@ -430,8 +467,8 @@ class Authentication:
                 raise Failure('in_use', 'The previous sign-in did not stop within five seconds.')
             await asyncio.sleep(fixed_wait(50))
 
-    async def release(self, identifier: str, owner: Record) -> None:
-        async with self.subscriptions.state.lock(identifier):
+    async def release(self, identifier: str, owner: Record, *, allow_pending: bool = False) -> None:
+        async with self.subscriptions.state.lock(identifier, allow_pending=allow_pending):
             current = self.progress(identifier)
             if current and current['owner'] == owner:
                 shutil.rmtree(self.temporary(identifier), ignore_errors=True)
@@ -691,11 +728,40 @@ class Authentication:
                     raise Failure('tool_failed', 'claude could not sign the account out.')
             if remove:
                 folder = self.subscriptions.state.subscription(identifier)
-                shutil.rmtree(folder / 'home', ignore_errors=True)
-                shutil.rmtree(folder / 'chats', ignore_errors=True)
-                (folder / 'record.json').unlink(missing_ok=True)
+                identity = self.subscriptions.state.identity
+                witness = None
+                async with self.subscriptions.mutation(identifier):
+                    await self.subscriptions.record(identifier)
+                    current = self.progress(identifier)
+                    if not current or current['owner'] != progress['owner']:
+                        raise Failure('in_use', 'Another operation replaced removal.')
+                    if identity is not None and identity.format == 2:
+                        witness = identity.capture(identifier)['witness']
+                        identity.journal(identifier, 'remove', witness)
+                # Existing native/credential cleanup has succeeded. Publish the
+                # intent before local multi-file cleanup, outside the short lock.
+                for name in ('home', 'chats'):
+                    path = folder / name
+                    if path.resolve(strict=False) != path:
+                        raise unsafe()
+                    try:
+                        shutil.rmtree(path)
+                        sync_directory(folder)
+                    except FileNotFoundError:
+                        pass
+                async with self.subscriptions.state.lock(identifier, allow_pending=True):
+                    current = self.progress(identifier)
+                    if not current or current['owner'] != progress['owner']:
+                        raise Failure('in_use', 'Another operation replaced removal.')
+                    if witness is not None and identity is not None:
+                        journal = identity.read_pending(identifier)
+                        if journal != {'version': 1, 'operation': 'remove', 'witness': witness, 'phase': 'prepared'}:
+                            raise unsafe()
+                        identity.finish_remove(identifier, witness)
+                    else:
+                        durable_delete(folder / 'record.json')
         finally:
-            await self.release(identifier, progress['owner'])
+            await self.release(identifier, progress['owner'], allow_pending=remove)
         return None if remove else await self.subscriptions.get(identifier)
 
     async def import_settings(self, identifier: str, file: Path) -> Record:

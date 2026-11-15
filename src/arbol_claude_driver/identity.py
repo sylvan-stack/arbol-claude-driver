@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .core import Failure
-from .identity_protocol import Object, fields, publish, publish_bytes, read, sync_directory, token, valid_token
+from .identity_protocol import Object, fields, publish, publish_bytes, read, remove, sync_directory, token, valid_token
 
 _ID = re.compile(r'[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}\Z', re.ASCII)
 
@@ -258,6 +258,27 @@ class IdentityState:
         self.require_proof()
         value = sidecar({'version': 1, 'witness': witness, 'state': state})
         publish(self.subscription(identifier) / 'identity.json', value)
+
+    def journal(self, identifier: str, operation: str, witness: str, phase: str = 'prepared') -> Object:
+        self.require_proof()
+        value = pending({'version': 1, 'operation': operation, 'witness': witness, 'phase': phase})
+        publish(self.subscription(identifier) / 'identity-pending.json', value)
+        return value
+
+    def clear_journal(self, identifier: str) -> None:
+        self.require_proof()
+        remove(self.subscription(identifier) / 'identity-pending.json')
+
+    def finish_create(self, identifier: str, witness: str) -> None:
+        self.publish_sidecar(identifier, witness, 'active')
+        self.journal(identifier, 'create', witness, 'committed')
+        self.clear_journal(identifier)
+
+    def finish_remove(self, identifier: str, witness: str) -> None:
+        self.publish_sidecar(identifier, witness, 'retired')
+        remove(self.subscription(identifier) / 'record.json')
+        self.journal(identifier, 'remove', witness, 'committed')
+        self.clear_journal(identifier)
 
     def capture(self, identifier: str, expected: tuple[str, str] | None = None) -> Object:
         """Caller holds the canonical short lock and has validated its record."""
