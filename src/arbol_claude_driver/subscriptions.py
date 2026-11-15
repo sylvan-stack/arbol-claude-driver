@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
+from .metadata import Broker
 from .identity import canonical_id, private_file, unsafe
 from .identity_protocol import sync_directory, token, valid_token
 from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
@@ -638,6 +639,7 @@ class Authentication:
         succeeded = False
         timed_out = False
         output = ''
+        broker: Broker | None = None
         try:
             if not is_test(identifier):
                 # `anthropic` is the sign-in of every `claude` on this Mac: when it is already
@@ -655,7 +657,8 @@ class Authentication:
                 private_directory(folder)
                 address = folder / 'address'
                 browser = folder / 'browser'
-                python_launcher(browser, f'import os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
+                broker = await Broker.start(self.subscriptions.state, identifier, progress, 'login')
+                python_launcher(browser, broker.notification_code('address'))
                 env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
                 child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, str(self.subscriptions.folder(identifier)))
                 assert child.stdout and child.stderr and child.stdin
@@ -717,6 +720,8 @@ class Authentication:
                 if not status['accepted']:
                     raise Failure('credential_rejected', 'claude did not confirm the login.', {'remedy': 'Sign in.'})
                 await self.save(identifier, lambda record: {**record, 'state': 'signed_in', **({'account': status['account']} if status.get('account') else {}), 'checkedAt': now()}, owner=progress)
+            if broker is not None:
+                await broker.close()
             succeeded = True
             await self.release(identifier, progress)
             await emit({'step': 'done', 'subscription': await self.subscriptions.get(identifier)})
@@ -732,6 +737,8 @@ class Authentication:
             if child:
                 kill_group(child.pid, signal.SIGKILL)
                 await child.wait()
+            if broker is not None and not broker.closed:
+                await broker.close()
             if not succeeded:
                 async with self.subscriptions.state.lock(identifier, allow_pending=True):
                     current = self.progress(identifier)

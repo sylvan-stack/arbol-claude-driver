@@ -12,7 +12,10 @@ import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from .metadata import Broker
 
 from .core import Env, Failure, Record, clean_environment, epoch, fixed_wait, now
 from .state import private_directory, ps_time, read_json, write_json
@@ -23,7 +26,7 @@ ACTUAL_HOME = pwd.getpwuid(os.getuid()).pw_dir
 
 def python_launcher(path: Path, code: str, interpreter: str | None = None) -> None:
     """Exec the selected interpreter even when its packaged path has spaces."""
-    path.write_text('#!/bin/sh\nexec ' + shlex.quote(interpreter or sys.executable) + ' -I -c ' + shlex.quote(code) + ' "$@"\n')
+    path.write_text('#!/bin/sh\nexec ' + shlex.quote(interpreter or sys.executable) + ' -ISB -c ' + shlex.quote(code) + ' "$@"\n')
     path.chmod(0o700)
 
 
@@ -174,17 +177,16 @@ def require_tool(tool: Record) -> str:
     return str(tool['path'])
 
 
-def run_launchers(folder: Path, env: Env) -> tuple[Path, Path]:
+def run_launchers(folder: Path, env: Env, broker: Broker) -> tuple[Path, Path]:
     private_directory(folder)
     candidate = env.get('SHELL', '')
     real = candidate if Path(candidate).name in {'bash', 'zsh'} else '/bin/zsh'
-    identity = 'umask 077\nstamp=$(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C TZ=UTC /bin/ps -p "$$" -o lstart=)\n'
     shell = folder / Path(real).name
-    shell.write_text('#!/bin/sh\n' + identity + f'printf \'%s\\t%s\\n\' "$$" "$stamp" >> {shlex.quote(str(folder / "shell-calls"))}\nexport SHELL={shlex.quote(real)}\nexec {shlex.quote(real)} "$@"\n')
-    shell.chmod(0o700)
+    python_launcher(shell, broker.notification_code('shell') +
+                    f'os.environ["SHELL"]={real!r}\nos.execv({real!r},[{real!r},*sys.argv[1:]])\n')
     launcher = folder / 'launch-tool'
-    launcher.write_text('#!/bin/sh\n' + identity + f'printf \'%s\\t%s\\n\' "$$" "$stamp" > {shlex.quote(str(folder / "tool-owner"))}\nexec "$@"\n')
-    launcher.chmod(0o700)
+    python_launcher(launcher, broker.notification_code('tool') +
+                    'if len(sys.argv)<2: raise SystemExit(1)\nos.execv(sys.argv[1],sys.argv[1:])\n')
     return launcher, shell
 
 

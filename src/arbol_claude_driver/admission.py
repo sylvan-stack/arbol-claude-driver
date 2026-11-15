@@ -30,6 +30,13 @@ NORMAL_CONTEXT = 'ARBOL_DRIVER_ADMISSION_CONTEXT'
 MAINTENANCE_FD = 'ARBOL_DRIVER_MAINTENANCE_FD'
 MAINTENANCE_CONTEXT = 'ARBOL_DRIVER_MAINTENANCE_CONTEXT'
 AUTHORITY_ENV = (NORMAL_FD, NORMAL_CONTEXT, MAINTENANCE_FD, MAINTENANCE_CONTEXT)
+_CURRENT: Admission | None = None
+
+
+def current_admission() -> Admission:
+    if _CURRENT is None or _CURRENT.closed:
+        refuse()
+    return _CURRENT
 
 
 def without_authority(environment: dict[str, str]) -> dict[str, str]:
@@ -331,6 +338,8 @@ class Admission:
                     refuse()
             frames.no_extra()
             frames.send({**frame, 'type': 'started'})
+            global _CURRENT
+            _CURRENT = admission
             return admission
         except BaseException:
             # A published active obligation deliberately remains unresolved.

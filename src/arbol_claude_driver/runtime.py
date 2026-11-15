@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .continuity import Chats, Runs
 from .core import Command, Env, Failure, Record, compact, fixed_wait, redact, safe_text, loads
+from .metadata import Broker
 from .history import MessageDigest, text_history
 from .processes import ACTUAL_HOME, close_pipes, end_run_groups, inspect_tool, kill_group, owner_mcp_arguments, require_tool, run_launchers, spawn, wait_exit
 from .protocol import RunEvents, RunProtocol, exit_failure
@@ -84,6 +85,8 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             if not settled:
                 cancelled = True
                 stop_event.set()
+    broker: Broker | None = None
+    stop_deadline: float | None = None
     control_task = asyncio.create_task(controls()) if command.options.get('control') else None
     try:
         if cancel.is_set():
@@ -99,7 +102,8 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             child_env['ARBOL_CHAT'] = request['chatSessionId']
         # In ~/.claude the tool reads the owner's MCP servers itself; only a test home needs them passed (CLD-3.20, CLD-D20).
         owner_args = owner_mcp_arguments(env.get('HOME', ACTUAL_HOME)) if request['tools'] == 'all' and is_test(initial['id']) else []
-        launcher, shell = run_launchers(temp, env)
+        broker = await Broker.start(subscriptions.state, initial['id'], record, 'run')
+        launcher, shell = run_launchers(temp, env, broker)
         child_env.update(CLAUDE_CODE_SHELL=str(shell), CLAUDE_CODE_DISABLE_AUTO_MEMORY='1', BASH_DEFAULT_TIMEOUT_MS='300000', BASH_MAX_TIMEOUT_MS='1800000', CLAUDE_CODE_MAX_RETRIES='3')
         if request['searchPath']:
             child_env['PATH'] = child_env.get('PATH', '') + os.pathsep + os.pathsep.join(request['searchPath'])
@@ -108,7 +112,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             child = await spawn(str(launcher), [program, *run_arguments(request, plan['conversation'], command.options.get('control') is True, plan['resume']), *owner_args], child_env, cwd)
             assert child.stdin and child.stdout and child.stderr
             stderr = ''
-            stop_deadline: float | None = None
+            stop_deadline = None
             cleanup_done = False
             cleanup_remaining: list[int] = []
             interrupt_id: str | None = None
@@ -343,6 +347,11 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             await asyncio.gather(control_task, return_exceptions=True)
         if request.get('workingDirectory') is None and plan.get('syntheticFile'):
             await chats.discard_synthetic(plan, request)
+        if broker is not None:
+            try:
+                await broker.close(deadline=stop_deadline)
+            except BaseException as failure:
+                error = error or failure
         async with subscriptions.state.lock(request['subscriptionId'], allow_pending=True):
             if runs.owns(record):
                 shutil.rmtree(temp, ignore_errors=True)
