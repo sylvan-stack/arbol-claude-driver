@@ -16,10 +16,10 @@ from .admission import (
     descriptor_number, verify_acceptance,
 )
 from .core import Command, Failure
-from .identity import canonical_id
+from .identity import canonical_id, pending, sidecar
 from .identity_protocol import (
-    Authority, Object, Payload, canonical_uuid, decode, physical, private_directory,
-    read, read_bytes, refuse, sha256, validate,
+    Authority, MANIFEST_LIMIT, MAX_ENTRIES, Object, Payload, canonical, canonical_uuid, decode, fields, natural, physical, private_directory,
+    publish, publish_bytes, read, read_bytes, refuse, sha256, sync_directory, valid_hash, valid_token, validate,
 )
 
 OPERATIONS = ('upgrade', 'identity-reset', 'restore', 'identity-recover')
@@ -49,6 +49,245 @@ def administrative_arguments(command: Command) -> str:
             from .core import retired_route
             raise retired_route()
     return operation
+
+
+ROOT_METADATA = ('format', 'identity.json', 'identity-maintenance.json', 'identity-upgrade.json')
+
+
+def metadata_name(value: object) -> str:
+    if not isinstance(value, str):
+        refuse()
+    if value in ROOT_METADATA:
+        return value
+    parts = value.split('/')
+    if len(parts) != 3 or parts[0] != 'subscriptions' or parts[2] not in ('identity.json', 'identity-pending.json'):
+        refuse()
+    canonical_id(parts[1])
+    return value
+
+
+def metadata_names(directory: Path, extra: list[str] | None = None) -> list[str]:
+    names = set(ROOT_METADATA)
+    names.update(metadata_name(name) for name in (extra or []))
+    subscriptions = directory / 'subscriptions'
+    try:
+        subscriptions.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        private_directory(subscriptions)
+        for entry in subscriptions.iterdir():
+            canonical_id(entry.name)
+            private_directory(entry)
+            names.update(f'subscriptions/{entry.name}/{name}' for name in ('identity.json', 'identity-pending.json'))
+            if len(names) > MAX_ENTRIES:
+                refuse()
+    if len(names) > MAX_ENTRIES:
+        refuse()
+    return sorted(names, key=lambda name: name.encode())
+
+
+def raw_format(raw: bytes | None) -> int | None:
+    if raw is None:
+        return None
+    return {b'1': 1, b'2': 2}.get(raw.strip())
+
+
+@dataclass(frozen=True)
+class Archive:
+    directory: Path
+    manifest: Object
+    digest: str
+
+    @classmethod
+    def load(cls, directory: Path, *, source: bool = False) -> Archive:
+        private_directory(directory)
+        raw = read_bytes(directory / 'manifest.json', limit=MANIFEST_LIMIT)
+        manifest = decode(raw, limit=MANIFEST_LIMIT)
+        fields(manifest, 'version kind format files')
+        if (manifest['kind'] != 'driver-identity-backup' or manifest['format'] is not None
+                and (type(manifest['format']) is not int or manifest['format'] not in (1, 2))
+                or not isinstance(manifest['files'], list) or len(manifest['files']) > MAX_ENTRIES):
+            refuse()
+        prior = b''
+        expected = {'manifest.json'}
+        size = len(raw)
+        data: dict[str, bytes | None] = {}
+        for row in manifest['files']:
+            if not isinstance(row, dict) or set(row) != {'path', 'present', 'size', 'sha256'}:
+                refuse()
+            name = metadata_name(row['path'])
+            if name.encode() <= prior or type(row['present']) is not bool or not natural(row['size']):
+                refuse()
+            prior = name.encode()
+            if not row['present']:
+                if row['size'] != 0 or row['sha256'] is not None:
+                    refuse()
+                data[name] = None
+                continue
+            if not valid_hash(row['sha256']):
+                refuse()
+            content = read_bytes(directory / name, limit=MANIFEST_LIMIT - size)
+            if len(content) != row['size'] or sha256(content) != row['sha256']:
+                refuse()
+            size += len(content)
+            data[name] = content
+            expected.add(name)
+            expected.update('/'.join(name.split('/')[:index]) for index in range(1, len(name.split('/'))))
+        if not set(ROOT_METADATA).issubset(data) or raw_format(data['format']) != manifest['format']:
+            refuse()
+        actual: set[str] = set()
+
+        def visit(folder: Path) -> None:
+            for path in folder.iterdir():
+                spelling = path.relative_to(directory).as_posix()
+                if spelling not in expected:
+                    refuse()
+                actual.add(spelling)
+                info = path.lstat()
+                if stat.S_ISDIR(info.st_mode):
+                    private_directory(path)
+                    visit(path)
+                elif not stat.S_ISREG(info.st_mode):
+                    refuse()
+        visit(directory)
+        if actual != expected:
+            refuse()
+        if source:
+            if manifest['format'] not in (1, 2):
+                refuse()
+            for name, source_bytes in data.items():
+                if source_bytes is None or name == 'format':
+                    continue
+                document = decode(source_bytes)
+                if name == 'identity.json':
+                    fields(document, 'version generation')
+                    if not valid_token(document['generation']):
+                        refuse()
+                elif name.endswith('/identity.json'):
+                    sidecar(document)
+                elif name.endswith('/identity-pending.json'):
+                    pending(document)
+                elif name == 'identity-maintenance.json':
+                    local_marker(document)
+                else:
+                    fields(document, 'version from to generation backup backupSha256')
+                    if (type(document['from']) is not int or document['from'] != 1
+                            or type(document['to']) is not int or document['to'] != 2
+                            or not valid_token(document['generation']) or not valid_hash(document['backupSha256'])
+                            or not isinstance(document['backup'], str) or not os.path.isabs(document['backup'])):
+                        refuse()
+        return cls(directory, manifest, sha256(raw))
+
+    def content(self, name: str) -> bytes | None:
+        row = next((row for row in self.manifest['files'] if row['path'] == name), None)
+        if row is None or not row['present']:
+            return None
+        raw = read_bytes(self.directory / name, limit=MANIFEST_LIMIT)
+        if len(raw) != row['size'] or sha256(raw) != row['sha256']:
+            refuse()
+        return raw
+
+
+def local_marker(value: Object) -> Object:
+    fields(value, 'version component session epoch operation attempt payloadSha256 generation phase sourceSha256 backupSha256')
+    if (value['component'] != COMPONENT or not canonical_uuid(value['session'])
+            or value['operation'] not in OPERATIONS or value['phase'] not in ('pending', 'complete')
+            or any(not valid_token(value[key]) for key in ('epoch', 'attempt', 'generation'))
+            or any(not valid_hash(value[key]) for key in ('payloadSha256', 'backupSha256'))
+            or value['sourceSha256'] is not None and not valid_hash(value['sourceSha256'])
+            or (value['operation'] == 'restore') != (value['sourceSha256'] is not None)):
+        refuse()
+    return value
+
+
+def snapshot(directory: Path, names: list[str]) -> tuple[Object, dict[str, bytes | None]]:
+    data: dict[str, bytes | None] = {}
+    size = 0
+    rows: list[Object] = []
+    for name in names:
+        metadata_name(name)
+        try:
+            content = read_bytes(directory / name, limit=MANIFEST_LIMIT - size)
+        except FileNotFoundError:
+            content = None
+        data[name] = content
+        size += len(content) if content is not None else 0
+        rows.append({'path': name, 'present': content is not None, 'size': len(content) if content is not None else 0,
+                     'sha256': sha256(content) if content is not None else None})
+    manifest: Object = {'version': 1, 'kind': 'driver-identity-backup', 'format': raw_format(data['format']), 'files': rows}
+    if len(canonical(manifest)) + size > MANIFEST_LIMIT:
+        refuse()
+    return manifest, data
+
+
+def archive_parent(directory: Path, relative: str) -> None:
+    current = directory
+    for part in relative.split('/')[:-1]:
+        current /= part
+        private_directory(current, create=True)
+
+
+def preserve(directory: Path, destination: Path, context: Object, source_hash: str | None,
+             *, extra: list[str] | None = None) -> Archive:
+    """Only called under the verified exclusive component and local guard."""
+    binding_path = destination / 'preservation.json'
+    before = destination / 'before'
+    binding = {'version': 1, 'kind': 'driver-identity-preservation', 'attempt': context['attempt'],
+               'operation': context['operation'], 'stateDirectorySha256': sha256(str(directory).encode()),
+               'sourceSha256': source_hash}
+    if binding_path.exists():
+        saved = read(binding_path)
+        fields(saved, 'version kind attempt operation stateDirectorySha256 sourceSha256 beforeSha256')
+        if {key: value for key, value in saved.items() if key != 'beforeSha256'} != binding or not valid_hash(saved['beforeSha256']):
+            refuse()
+        if (before / 'manifest.json').exists():
+            archive = Archive.load(before)
+            if archive.digest != saved['beforeSha256']:
+                refuse()
+            return archive
+    else:
+        if any(destination.iterdir()):
+            refuse()
+        saved = {}
+    manifest, data = snapshot(directory, metadata_names(directory, extra))
+    digest = sha256(canonical(manifest))
+    if saved and saved['beforeSha256'] != digest:
+        refuse()  # Partial preservation cannot be rebound to changed state.
+    if not saved:
+        publish(binding_path, {**binding, 'beforeSha256': digest})
+    private_directory(before, create=True)
+    for name, content in data.items():
+        if content is None:
+            continue
+        archive_parent(before, name)
+        path = before / name
+        if path.exists():
+            if read_bytes(path, limit=MANIFEST_LIMIT) != content:
+                refuse()
+        else:
+            publish_bytes(path, content, limit=MANIFEST_LIMIT)
+    # Keep interrupted staging bytes as evidence outside the immutable entry.
+    # Only exact private writer temporary names from this same bound attempt
+    # are moved; unknown files are never silently ignored.
+    for folder, _, files in os.walk(before, followlinks=False):
+        for name in files:
+            if not name.startswith('.') or '.' not in name[1:]:
+                continue
+            base, _, suffix = name[1:].rpartition('.')
+            if base not in ('format', 'identity.json', 'identity-pending.json', 'identity-upgrade.json', 'identity-maintenance.json', 'manifest.json') or not valid_token(suffix):
+                refuse()
+            path = Path(folder) / name
+            read_bytes(path, limit=MANIFEST_LIMIT)
+            evidence = private_directory(destination / 'staging-evidence', create=True)
+            target = evidence / (sha256(path.relative_to(before).as_posix().encode()) + '-' + suffix)
+            if target.exists():
+                refuse()
+            os.rename(path, target)
+            sync_directory(path.parent)
+            sync_directory(evidence)
+    publish(before / 'manifest.json', manifest, limit=MANIFEST_LIMIT)
+    return Archive.load(before)
 
 
 @dataclass
@@ -154,6 +393,53 @@ class Maintenance:
     def check(self) -> None:
         with self.authority.mutex():
             self.check_locked()
+
+    def begin_attempt(self) -> tuple[Archive, Object, Archive | None]:
+        self.check()
+        directory = Path(str(self.command.options['state-dir']))
+        source = Archive.load(Path(str(self.command.options['source'])), source=True) if self.context['operation'] == 'restore' else None
+        operation = self.operation()
+        source_hash = source.digest if source is not None else None
+        if source_hash != operation['sourceSha256']:
+            refuse()
+        before = preserve(directory, Path(str(self.command.options['backup'])), self.context, source_hash,
+                          extra=[row['path'] for row in source.manifest['files']] if source is not None else None)
+        if operation['backupSha256'] is not None and operation['backupSha256'] != before.digest:
+            refuse()
+        marker = local_marker({'version': 1, 'component': COMPONENT, 'session': self.context['session'],
+                               'epoch': self.context['epoch'], 'operation': self.context['operation'],
+                               'attempt': self.context['attempt'], 'payloadSha256': self.payload.digest,
+                               'generation': self.context['generation'], 'phase': 'pending',
+                               'sourceSha256': source_hash, 'backupSha256': before.digest})
+        path = directory / 'identity-maintenance.json'
+        if path.exists():
+            try:
+                current = local_marker(read(path))
+            except (ValueError, OSError):
+                if self.context['operation'] != 'restore':
+                    raise
+                current = None  # Raw failed bytes are already preserved.
+            if current in (marker, {**marker, 'phase': 'complete'}):
+                assert current is not None
+                marker = current
+            else:
+                if self.context['operation'] != 'restore':
+                    if current is None or current['phase'] != 'complete':
+                        refuse()
+                    # A new closed-session operation cannot consume an earlier
+                    # result. Its exact completed predecessor must have been
+                    # durably archived by the provider before pointer replacement.
+                    prior = read(self.session_folder / 'attempts' / current['attempt'] / 'result.json')
+                    validate('result', prior)
+                    for key in ('component', 'session', 'epoch', 'operation', 'attempt', 'payloadSha256', 'generation', 'backupSha256'):
+                        if prior[key] != current[key]:
+                            refuse()
+                    if prior['stateDirectorySha256'] != sha256(str(directory).encode()):
+                        refuse()
+                publish(path, marker)
+        else:
+            publish(path, marker)
+        return before, marker, source
 
     async def execute(self) -> Object:
         self.check()
