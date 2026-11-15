@@ -9,6 +9,7 @@ import fcntl
 import os
 import stat
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
 from .admission import (
@@ -156,7 +157,7 @@ class Archive:
         if actual != expected:
             refuse()
         if source:
-            if manifest['format'] not in (1, 2):
+            if manifest['format'] not in (1, 2) or manifest['format'] == 2 and data['identity.json'] is None:
                 refuse()
             for name, source_bytes in data.items():
                 if source_bytes is None or name == 'format':
@@ -181,8 +182,12 @@ class Archive:
                         refuse()
         return cls(directory, manifest, sha256(raw))
 
+    @cached_property
+    def rows(self) -> dict[str, Object]:
+        return {row['path']: row for row in self.manifest['files']}
+
     def content(self, name: str) -> bytes | None:
-        row = next((row for row in self.manifest['files'] if row['path'] == name), None)
+        row = self.rows.get(name)
         if row is None or not row['present']:
             return None
         raw = read_bytes(self.directory / name, limit=MANIFEST_LIMIT)
@@ -290,6 +295,63 @@ def preserve(directory: Path, destination: Path, context: Object, source_hash: s
             sync_directory(evidence)
     publish(before / 'manifest.json', manifest, limit=MANIFEST_LIMIT)
     return Archive.load(before)
+
+
+
+def preserve_entry(destination: Path, data: dict[str, bytes | None]) -> Archive:
+    """An internal immutable metadata entry, not a registry authority source."""
+    names = sorted(set(ROOT_METADATA) | set(data), key=lambda name: name.encode())
+    if len(names) > MAX_ENTRIES:
+        refuse()
+    rows: list[Object] = []
+    total = 0
+    for name in names:
+        metadata_name(name)
+        content = data.get(name)
+        total += len(content) if content is not None else 0
+        rows.append({'path': name, 'present': content is not None, 'size': len(content) if content is not None else 0,
+                     'sha256': sha256(content) if content is not None else None})
+    manifest: Object = {'version': 1, 'kind': 'driver-identity-backup', 'format': raw_format(data.get('format')), 'files': rows}
+    digest = sha256(canonical(manifest))
+    if total + len(canonical(manifest)) > MANIFEST_LIMIT:
+        refuse()
+    private_directory(destination, create=True)
+    if (destination / 'manifest.json').exists():
+        result = Archive.load(destination)
+        if result.digest != digest:
+            refuse()
+        return result
+    for row in rows:
+        if not row['present']:
+            continue
+        name = row['path']
+        content = data[name]
+        assert content is not None
+        archive_parent(destination, name)
+        path = destination / name
+        if path.exists():
+            if read_bytes(path, limit=MANIFEST_LIMIT) != content:
+                refuse()
+        else:
+            publish_bytes(path, content, limit=MANIFEST_LIMIT)
+    for folder, _, files in os.walk(destination, followlinks=False):
+        for name in files:
+            if not name.startswith('.'):
+                continue
+            base, _, suffix = name[1:].rpartition('.')
+            if base not in (*ROOT_METADATA, 'identity-pending.json', 'manifest.json') or not valid_token(suffix):
+                refuse()
+            path = Path(folder) / name
+            read_bytes(path, limit=MANIFEST_LIMIT)
+            evidence = private_directory(destination.parent / 'staging-evidence', create=True)
+            target = evidence / (sha256(str(path.relative_to(destination.parent)).encode()) + '-' + suffix)
+            if target.exists():
+                refuse()
+            os.rename(path, target)
+            sync_directory(path.parent)
+            sync_directory(evidence)
+    publish(destination / 'manifest.json', manifest, limit=MANIFEST_LIMIT)
+    return Archive.load(destination)
 
 
 @dataclass
@@ -585,10 +647,103 @@ class Maintenance:
         publish(directory / 'identity.json', {'version': 1, 'generation': self.context['generation']})
         return self.complete(directory, marker)
 
+    async def restore(self, directory: Path, before: Archive, marker: Object, source: Archive) -> Object:
+        destination = Path(str(self.command.options['backup']))
+        desired = self.context['generation']
+        # A known restore must invalidate both old lineages, including an exact
+        # byte-for-byte input. Malformed failed before bytes are only evidence.
+        for archive in (source, before):
+            content = archive.content('identity.json')
+            if content is None:
+                continue
+            try:
+                value = decode(content)
+            except ValueError:
+                if archive is source:
+                    raise
+                continue
+            if value.get('generation') == desired:
+                refuse()
+        checkpoint_path = destination / 'restore-checkpoint.json'
+        fixed = {'version': 1, 'kind': 'driver-identity-restore', 'attempt': self.context['attempt'],
+                 'sourceSha256': source.digest, 'backupSha256': before.digest}
+        if checkpoint_path.exists():
+            checkpoint = read(checkpoint_path)
+            fields(checkpoint, 'version kind attempt sourceSha256 backupSha256 phase conversionBeforeSha256')
+            if ({key: value for key, value in checkpoint.items() if key not in ('phase', 'conversionBeforeSha256')} != fixed
+                    or checkpoint['phase'] not in ('prepared', 'restored', 'converted', 'complete')
+                    or checkpoint['conversionBeforeSha256'] is not None and not valid_hash(checkpoint['conversionBeforeSha256'])):
+                refuse()
+        else:
+            checkpoint = {**fixed, 'phase': 'prepared', 'conversionBeforeSha256': None}
+            publish(checkpoint_path, checkpoint)
+        if marker['phase'] == 'complete':
+            await self.validate_records(directory)
+            return self.complete(directory, marker)
+        if checkpoint['phase'] == 'prepared':
+            abandoned: dict[str, bytes | None] = {}
+            for row in source.manifest['files']:
+                name = row['path']
+                if name in ('identity-upgrade.json', 'identity-maintenance.json') or name.endswith('/identity-pending.json'):
+                    abandoned[name] = source.content(name)
+            preserve_entry(destination / 'abandoned-source', abandoned)
+            names = sorted({row['path'] for row in before.manifest['files']} |
+                           {row['path'] for row in source.manifest['files']}, key=lambda name: name.encode())
+            # The active marker is the durable restore intent. Historical
+            # source markers/journals are archived data, never active authority.
+            for name in names:
+                if name == 'identity-maintenance.json':
+                    continue
+                path = directory / metadata_name(name)
+                historical = name == 'identity-upgrade.json' or name.endswith('/identity-pending.json')
+                content = None if historical else source.content(name)
+                if content is None:
+                    try:
+                        path.lstat()
+                    except FileNotFoundError:
+                        pass
+                    else:
+                        remove(path)
+                else:
+                    archive_parent(directory, name)
+                    publish_bytes(path, content, limit=MANIFEST_LIMIT)
+            checkpoint = {**checkpoint, 'phase': 'restored'}
+            publish(checkpoint_path, checkpoint)
+        if checkpoint['phase'] == 'restored':
+            if source.manifest['format'] == 1:
+                conversion_folder = destination / 'conversion-before'
+                if checkpoint['conversionBeforeSha256'] is None:
+                    if state_format(directory) != 1:
+                        refuse()
+                    _, restored = snapshot(directory, metadata_names(directory))
+                    conversion = preserve_entry(conversion_folder, restored)
+                    checkpoint = {**checkpoint, 'conversionBeforeSha256': conversion.digest}
+                    publish(checkpoint_path, checkpoint)
+                else:
+                    conversion = Archive.load(conversion_folder)
+                    if conversion.digest != checkpoint['conversionBeforeSha256']:
+                        refuse()
+                if (directory / 'identity-upgrade.json').exists() or state_format(directory) == 1:
+                    self.convert(directory, conversion, conversion_folder)
+                elif state_format(directory) != 2 or root_identity(directory) != desired:
+                    refuse()
+            elif source.manifest['format'] == 2:
+                if state_format(directory) != 2:
+                    refuse()
+                publish(directory / 'identity.json', {'version': 1, 'generation': desired})
+            else:
+                refuse()
+            checkpoint = {**checkpoint, 'phase': 'converted'}
+            publish(checkpoint_path, checkpoint)
+        await self.validate_records(directory)
+        result = self.complete(directory, marker)
+        publish(checkpoint_path, {**checkpoint, 'phase': 'complete'})
+        return result
+
     async def execute(self) -> Object:
         self.check()
         operation = self.context['operation']
-        if operation not in ('upgrade', 'identity-reset'):
+        if operation not in ('upgrade', 'identity-reset', 'restore'):
             raise Failure('unsupported', 'This maintenance operation is not available in this source checkpoint.')
         directory = self.acquire_guard()
         if operation == 'identity-reset' and state_format(directory) != 2:
@@ -596,10 +751,13 @@ class Maintenance:
         if operation == 'upgrade' and state_format(directory) == 2 and not (directory / 'identity-upgrade.json').exists():
             if root_identity(directory) != self.context['generation']:
                 refuse()
-        before, marker, _ = self.begin_attempt()
+        before, marker, source = self.begin_attempt()
         if operation == 'upgrade':
             return await self.upgrade(directory, before, marker)
-        return await self.reset(directory, before, marker)
+        if operation == 'identity-reset':
+            return await self.reset(directory, before, marker)
+        assert source is not None
+        return await self.restore(directory, before, marker, source)
 
     def finish(self) -> None:
         if not self.closed:
