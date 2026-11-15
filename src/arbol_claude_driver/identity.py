@@ -259,6 +259,28 @@ class IdentityState:
         value = sidecar({'version': 1, 'witness': witness, 'state': state})
         publish(self.subscription(identifier) / 'identity.json', value)
 
+    def lifetime(self, identifier: str) -> Object | None:
+        self.check()
+        if self.format == 1:
+            return None
+        proof = self.capture(identifier)
+        return {key: proof[key] for key in ('generation', 'witness')}
+
+    def matches(self, identifier: str, expected: Object | None) -> bool:
+        self.check()
+        if self.format == 1:
+            return expected is None
+        if expected is None:
+            return False
+        if (set(expected) != {'generation', 'witness'}
+                or not all(valid_token(value) for value in expected.values())):
+            raise unsafe()
+        if self.read_pending(identifier) is not None:
+            return False
+        current = self.read_sidecar(identifier)
+        return bool(current is not None and current['state'] == 'active'
+                    and expected == {'generation': self.generation, 'witness': current['witness']})
+
     def journal(self, identifier: str, operation: str, witness: str, phase: str = 'prepared') -> Object:
         self.require_proof()
         value = pending({'version': 1, 'operation': operation, 'witness': witness, 'phase': phase})
