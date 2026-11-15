@@ -557,6 +557,125 @@ def _inventory(raw: bytes) -> Object:
     return decode(raw, limit=_DOCUMENT_LIMIT, exact=False)
 
 
+def _retain_start_failure(fixture: Fixture, child: subprocess.Popen[bytes], *,
+                          cleanup_end: float, original: BaseException) -> None:
+    """Drain real pre-Result pipes without requiring another selector allocation.
+
+    Every read is nonblocking. Both pipes, actual owned wait, every close and
+    each evidence write get independent attempts under the caller's one bound.
+    Overflow is drained and counted, while only the bounded actual prefix stays
+    in memory. An unread tail is explicitly truncated/unresolved, never empty.
+    """
+    prefixes = {name: bytearray() for name in ("stdout", "stderr")}
+    streams = {"stdout": child.stdout, "stderr": child.stderr}
+    observations: dict[str, Object] = {
+        name: {"present": stream is not None, "eof": False, "bytesObserved": 0}
+        for name, stream in streams.items()
+    }
+    pending: dict[str, int] = {}
+    cleanup_errors: list[str] = []
+
+    def failed(operation: str, error: BaseException) -> None:
+        note = f"Early H1 {operation} failed: {error!r}."
+        original.add_note(note)
+        cleanup_errors.append(note)
+
+    for name, stream in streams.items():
+        try:
+            if stream is None:
+                raise SpanFailure("The actual child output pipe is missing.")
+            descriptor = stream.fileno()
+            os.set_blocking(descriptor, False)
+            pending[name] = descriptor
+        except BaseException as error:
+            failed(f"{name} nonblocking observation setup", error)
+    reaped = False
+    can_poll = True
+    try:
+        while True:
+            if time.monotonic() >= cleanup_end:
+                break
+            progress = False
+            for name, descriptor in tuple(pending.items()):
+                if time.monotonic() >= cleanup_end:
+                    break
+                try:
+                    part = os.read(descriptor, 65536)
+                    if not part:
+                        observations[name]["eof"] = True
+                        del pending[name]
+                    else:
+                        observations[name]["bytesObserved"] += len(part)
+                        available = max(0, _FRAME_LIMIT + 1 - len(prefixes[name]))
+                        prefixes[name].extend(part[:available])
+                    progress = True
+                except BlockingIOError:
+                    pass
+                except BaseException as error:
+                    failed(f"{name} read", error)
+                    del pending[name]
+            exited = False
+            if can_poll:
+                try:
+                    exited = child.poll() is not None
+                except BaseException as error:
+                    failed("owned child poll", error)
+                    can_poll = False
+            if not pending and (exited or not can_poll):
+                break
+            remaining = cleanup_end - time.monotonic()
+            if remaining <= 0:
+                break
+            if not progress:
+                # No new worker, selector, timeout or extended retry budget.
+                time.sleep(min(0.01, remaining))
+        try:
+            child.wait(timeout=max(0, cleanup_end - time.monotonic()))
+            reaped = True
+        except BaseException as error:
+            failed("actual owned child wait/reap", error)
+    except BaseException as error:
+        failed("bounded failed-output drain", error)
+        # A drain/cancellation error must not suppress the owned wait attempt.
+        try:
+            child.wait(timeout=max(0, cleanup_end - time.monotonic()))
+            reaped = True
+        except BaseException as wait_error:
+            failed("actual owned child wait/reap", wait_error)
+    finally:
+        for name, stream in streams.items():
+            if stream is not None:
+                try:
+                    stream.close()
+                except BaseException as error:
+                    failed(f"{name} close", error)
+        for name, prefix in prefixes.items():
+            observation = observations[name]
+            observation.update(prefixBytes=len(prefix), prefixSha256=sha256(bytes(prefix)),
+                               overflow=observation["bytesObserved"] > _FRAME_LIMIT,
+                               truncated=(observation["bytesObserved"] > len(prefix)
+                                          or observation["present"] and not observation["eof"]))
+            if observation["overflow"] or observation["truncated"]:
+                original.add_note(f"Early H1 {name} overflow={observation['overflow']}, "
+                                  f"truncated={observation['truncated']}; preserve its actual failed prefix.")
+            try:
+                fixture.retain(f"actor-failed.{name}", bytes(prefix), limit=_FRAME_LIMIT + 1)
+            except BaseException as error:
+                failed(f"{name} failed-prefix retention", error)
+        try:
+            # Full original exceptions/notes remain on the re-raised exception;
+            # this finite private summary separately retains observation facts.
+            fixture.retain("actor-start-failure.json", canonical({
+                "version": 1, "kind": "abr38-early-helper-failure-output", "streams": observations,
+                "ownedChildReaped": reaped, "returncode": child.returncode if reaped else None,
+                "deadlineExpired": time.monotonic() >= cleanup_end,
+                "errors": [{"prefix": note[:1024], "truncated": len(note) > 1024}
+                           for note in cleanup_errors],
+            }), limit=16 * 1024)
+        except BaseException as error:
+            failed("failed-output summary retention", error)
+
+
 @dataclass
 class H1Child:
     fixture: Fixture
@@ -648,15 +767,17 @@ class H1Child:
                     except BaseException as cleanup:
                         error.add_note(f"Verified child cancellation unresolved: {cleanup!r}.")
                     try:
-                        child.wait(timeout=max(0, cleanup_end - time.monotonic()))
+                        _retain_start_failure(fixture, child, cleanup_end=cleanup_end, original=error)
                     except BaseException as cleanup:
-                        error.add_note(f"Actual owned child remains unresolved: {cleanup!r}.")
-                    for failed_stream in (child.stdout, child.stderr):
-                        if failed_stream is not None:
-                            try:
-                                failed_stream.close()
-                            except BaseException as cleanup:
-                                error.add_note(f"Actor output closure failed: {cleanup!r}.")
+                        error.add_note(f"Early failed-output observation unresolved: {cleanup!r}.")
+                        # Even an unexpected observer failure must not suppress
+                        # either independent owned pipe-close attempt.
+                        for failed_stream in (child.stdout, child.stderr):
+                            if failed_stream is not None:
+                                try:
+                                    failed_stream.close()
+                                except BaseException as close_error:
+                                    error.add_note(f"Actor output closure failed: {close_error!r}.")
                 if ticket is not None:
                     for close in (ticket.child_socket.close, ticket.frames.close):
                         try:
