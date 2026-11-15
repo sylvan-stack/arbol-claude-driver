@@ -16,11 +16,12 @@ import socket
 import stat
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from types import TracebackType
-from typing import Literal
+from types import CodeType, TracebackType
+from typing import ClassVar, Literal
 
 from arbol_claude_driver.admission import Admission, HelperHandoff, boot_uuid, normal_context, verify_acceptance
 from arbol_claude_driver.identity_protocol import (
@@ -1063,3 +1064,415 @@ class H1Child:
             else:
                 raise SpanFailure("H1 span did not settle; " + "; ".join(errors))
         return False
+
+
+@dataclass(frozen=True)
+class TerminalHelperWitness:
+    """Actual direct-owner objects and retained bytes, never a success flag.
+
+    The fixed source-admitted adapter supplies its complete pinned helper order.
+    A nested/async helper without actual-owner receipts is NOT replaced by
+    terminal metadata or absence: graph equality below makes that unavailable.
+    """
+
+    ticket: HelperHandoff
+    child: subprocess.Popen[bytes]
+    owner: Object
+    context_raw: bytes
+    terminal_raw: bytes
+    result_raw: bytes
+    ack_raw: bytes
+
+    @classmethod
+    def from_h1(cls, child: H1Child) -> TerminalHelperWitness:
+        require(child.settled and child.reaped and child.endpoints_closed,
+                "Positive H1 resources have not actually settled.")
+        child._verify_helper("terminal")
+        context, raw, ack, owner = child.helper_context, child.helper_context_raw, child.ack_raw, child.owner
+        if context is None or raw is None or ack is None or owner is None:
+            raise SpanFailure("H1 actual owner/context/ACK evidence is missing.")
+        terminal = read_bytes(child.fixture.admission.authority.folder / "writers" / context["invocation"] /
+                              (context["writer"] + ".json"))
+        return cls(child.ticket, child.child, dict(owner), raw, terminal, bytes(child.output["stdout"]), ack)
+
+    def verify(self, admission: Admission, expected_entry: str) -> Object:
+        from arbol_claude_driver.identity_protocol import identity_record
+
+        require(type(self.ticket) is HelperHandoff and self.ticket.parent is admission
+                and self.ticket.completed and type(self.child) is subprocess.Popen,
+                "Terminal helper lacks its genuine actual owner objects.")
+        identity_record(self.owner)
+        require(self.owner["pid"] == self.child.pid, "Terminal helper PID differs from its actual child.")
+        status = self.child.wait(timeout=0)
+        require(type(status) is int and self.child.returncode == status,
+                "Terminal helper does not have its actual direct-child wait disposition.")
+        live = inspect_process(self.child.pid)
+        require(live is None or live.owner != self.owner, "Terminal helper identity is still live.")
+        require(self.child.stdout is not None and self.child.stdout.closed
+                and self.child.stderr is not None and self.child.stderr.closed
+                and self.ticket.child_socket.fileno() == -1 and self.ticket.frames.socket.fileno() == -1,
+                "Terminal helper output/handshake resources are not actually closed.")
+        require(0 < len(self.result_raw) <= 65536 and 0 < len(self.ack_raw) <= _FRAME_LIMIT,
+                "Terminal helper result/ACK evidence is missing or unbounded.")
+        context = _document(self.context_raw)
+        from arbol_claude_driver.admission import normal_context
+        normal_context(context)
+        suite = admission.context
+        require(expected_entry in admission.payload.descriptor["helpers"] and context["entry"] == expected_entry
+                and context["role"] == "helper" and context["component"] == COMPONENT
+                and context["registry"] == suite["registry"] and context["registrySha256"] == suite["registrySha256"]
+                and context["invocation"] == suite["invocation"] and context["epoch"] == suite["epoch"]
+                and context["boot"] == suite["boot"] and context["payloadSha256"] == admission.payload.digest
+                and context["acceptanceSha256"] == suite["acceptanceSha256"] and context["process"] == self.owner
+                and context["parent"] == {"writer": suite["writer"], **suite["process"]}
+                and context["handoff"] == self.ticket.pending["handoff"]
+                and context["writer"] == self.ticket.pending["child"], "Actual terminal helper context differs.")
+        require(read_bytes(self.ticket.context_path) == self.context_raw, "Original terminal helper context changed.")
+        handoff_raw = read_bytes(admission.authority.folder / "handoffs" / (context["handoff"] + ".json"))
+        handoff = _document(handoff_raw)
+        validate("handoff", handoff)
+        require(handoff == {**self.ticket.pending, "phase": "accepted", "challenge": handoff["challenge"]}
+                and valid_token(handoff["challenge"]) and handoff["contextSha256"] == sha256(self.context_raw),
+                "Terminal helper lacks its actual accepted transfer.")
+        terminal = _document(self.terminal_raw)
+        validate("writer", terminal)
+        require(terminal == _expected_writer(context, sha256(self.context_raw), "terminal")
+                and read_bytes(admission.authority.folder / "writers" / context["invocation"] /
+                               (context["writer"] + ".json")) == self.terminal_raw,
+                "Terminal helper lacks unchanged genuine terminal evidence.")
+        ack = _document(self.ack_raw)
+        fields(ack, "version kind pid contextSha256 handoffSha256")
+        require(ack == {"version": 1, "kind": "abr38-actual-helper-ack", "pid": self.child.pid,
+                        "contextSha256": sha256(self.context_raw), "handoffSha256": sha256(handoff_raw)}
+                and type(ack["pid"]) is int, "Actual source-bound ACK receipt differs.")
+        return {"invocation": context["invocation"], "writer": context["writer"], "handoff": context["handoff"],
+                "contextSha256": sha256(self.context_raw), **self.owner, "waitStatus": status,
+                "resultSha256": sha256(self.result_raw), "terminalRecordSha256": sha256(self.terminal_raw),
+                "ackEvidenceSha256": sha256(self.ack_raw)}
+
+
+class TerminalCloseScope:
+    """The future fixed runner's SOLE owning Admission context, not a second finish.
+
+    Its adapter must remove the competing bootstrap finally. Body/integration
+    admission still precedes that wiring. arm() consumes source-level actual
+    callback bytes and owner objects, never external modes/paths/success flags.
+    Once armed, scope exit owns exactly one real finish and exits quietly; a
+    failed/unarmed body preserves active/unknown custody rather than faking it.
+    """
+
+    _claimed: ClassVar[bool] = False
+
+    def __init__(self, fixture: Fixture, results: LocalResults, streams: SuiteStreams, h1: H1Child):
+        self.fixture, self.results, self.streams, self.h1 = fixture, results, streams, h1
+        self.admission = fixture.admission
+        self.entered = False
+        self.armed = False
+        self.finish_may_have_begun = False
+        self.finish_called = False
+        self.intercepted = False
+        self.close_attempted = False
+        self.close_returned = False
+        self.saved_fd = -1
+        self.saved_identity: tuple[int, int, int, int] | None = None
+        self.saved_thread = -1
+        self.saved_pid = -1
+        self.finish_code: CodeType | None = None
+        self.real_close = os.close
+        self.wrapper = self._close
+        self.old_exception_hook = sys.excepthook
+        self.quiet_hook = self._quiet_exception
+        self.actual_error: BaseException | None = None
+
+    def __enter__(self) -> TerminalCloseScope:
+        import posix
+        require(type(self) is TerminalCloseScope and not TerminalCloseScope._claimed
+                and not self.entered and self.results.fixture is self.fixture and self.streams.fixture is self.fixture
+                and self.h1.fixture is self.fixture and not self.admission.closed and os.close is posix.close,
+                "Terminal scope is repeated, foreign or already patched.")
+        TerminalCloseScope._claimed = True
+        self.fixture.verify()
+        _suite_current(self.admission)
+        self.real_close = posix.close
+        self.old_exception_hook = sys.excepthook
+        sys.excepthook = self.quiet_hook
+        self.entered = True
+        return self
+
+    def _quiet_exception(self, kind: type[BaseException], error: BaseException, trace: TracebackType | None) -> None:
+        if self.finish_may_have_begun:
+            os._exit(2)
+        self.old_exception_hook(kind, error, trace)
+
+    def _original_lease(self) -> tuple[int, int, int, int]:
+        require(type(self.admission.lease) is int and self.admission.lease >= 3
+                and (self.saved_fd == -1 or self.admission.lease == self.saved_fd),
+                "Terminal scope original descriptor changed.")
+        held = os.fstat(self.admission.lease)
+        named = (self.admission.authority.folder / "admission.lock").lstat()
+        require(stat.S_ISREG(held.st_mode) and held.st_uid == os.getuid() and stat.S_IMODE(held.st_mode) == 0o600
+                and held.st_nlink == 1 and _same(held, named), "Terminal original admission description is unsafe.")
+        return (held.st_dev, held.st_ino, held.st_uid, held.st_mode)
+
+    def _finish_source(self) -> CodeType:
+        from types import CodeType
+        source_name = str(self.admission.payload.root / "src/arbol_claude_driver/admission.py")
+        raw = _payload_bytes(self.admission, "src/arbol_claude_driver/admission.py", limit=_DOCUMENT_LIMIT)
+        module = compile(raw, source_name, "exec", dont_inherit=True, optimize=sys.flags.optimize)
+        classes = [code for code in module.co_consts if isinstance(code, CodeType) and code.co_name == "Admission"]
+        require(len(classes) == 1, "Packaged Admission source is ambiguous.")
+        finishes = [code for code in classes[0].co_consts if isinstance(code, CodeType) and code.co_name == "finish"]
+        require(len(finishes) == 1 and type(self.admission) is Admission
+                and Admission.finish.__code__ == finishes[0] and Admission.finish.__code__.co_filename == source_name,
+                "Actual Admission.finish is not the exact packaged source.")
+        return Admission.finish.__code__
+
+    def _graph(self, witnesses: tuple[TerminalHelperWitness, ...], entries: tuple[str, ...]) -> list[Object]:
+        require(0 < len(witnesses) <= 4096 and len(witnesses) == len(entries), "Pinned full helper schedule differs.")
+        admission, suite = self.admission, self.admission.context
+        with admission.authority.mutex():
+            require(not admission.transfers and not os.path.lexists(admission.authority.folder / "taint.json"),
+                    "Terminal scope has unresolved transfers or taint.")
+            helper_rows = [witness.verify(admission, entry) for witness, entry in zip(witnesses, entries, strict=True)]
+            writers: dict[str, Object] = {}
+            folder = admission.authority.folder / "writers" / suite["invocation"]
+            for path in folder.iterdir():
+                require(path.name.endswith(".json"), "Unexpected current-invocation writer entry.")
+                row = _document(read_bytes(path))
+                validate("writer", row)
+                require(row["invocation"] == suite["invocation"] and row["writer"] + ".json" == path.name
+                        and row["component"] == COMPONENT, "Current-invocation writer binding differs.")
+                writers[row["writer"]] = row
+            expected_writers = {suite["writer"], suite["parent"]["writer"], *(row["writer"] for row in helper_rows)}
+            require(len(expected_writers) == len(helper_rows) + 2 and set(writers) == expected_writers,
+                    "A current-invocation helper lacks actual owner-backed completion evidence.")
+            require(writers[suite["writer"]] == _expected_writer(suite, admission.context_digest, "active"),
+                    "Whole Suite is not genuinely still active.")
+            root = writers[suite["parent"]["writer"]]
+            require(root == {"version": 1, "invocation": suite["invocation"], "writer": suite["parent"]["writer"],
+                             "parent": None, "component": COMPONENT, "epoch": suite["epoch"],
+                             "payloadSha256": admission.payload.digest, "boot": suite["boot"],
+                             **{key: suite["parent"][key] for key in ("pid", "startedAt")},
+                             "phase": "terminal", "contextSha256": None}, "Actual provider root differs.")
+            expected_handoffs = {suite["handoff"], *(row["handoff"] for row in helper_rows)}
+            seen_handoffs: set[str] = set()
+            for path in (admission.authority.folder / "handoffs").iterdir():
+                if path.name.endswith(".context.json"):
+                    continue
+                require(path.name.endswith(".json"), "Unexpected current handoff entry.")
+                row = _document(read_bytes(path))
+                validate("handoff", row)
+                if row["invocation"] == suite["invocation"]:
+                    require(row["phase"] == "accepted" and row["handoff"] + ".json" == path.name,
+                            "Current-invocation handoff is unfinished or replaced.")
+                    seen_handoffs.add(row["handoff"])
+            require(seen_handoffs == expected_handoffs and len(expected_handoffs) == len(helper_rows) + 1,
+                    "A nested/async or unlisted helper lacks its complete actual-owner receipt.")
+        return helper_rows
+
+    def arm(self, completed_rows: tuple[LocalResult, ...], witnesses: tuple[TerminalHelperWitness, ...], *,
+            expected_entries: tuple[str, ...], tuple_pins_raw: bytes, tuple_pins_sha256: str) -> None:
+        require(self.entered and not self.armed and not self.finish_may_have_begun
+                and not self.streams.closed and self.streams.exchanged,
+                "Terminal scope is not in its one positive post-H1 phase.")
+        require(valid_hash(tuple_pins_sha256) and sha256(tuple_pins_raw) == tuple_pins_sha256,
+                "Actual retained five-tuple pin bytes differ.")
+        _document(tuple_pins_raw, _DOCUMENT_LIMIT)  # Canonical bytes; no new authority/locator/schema.
+        self.results.require_ready()
+        self.fixture.verify()
+        _suite_current(self.admission)
+        require(self.h1.settled and self.h1.reaped and self.h1.endpoints_closed
+                and self.h1.child.returncode == 0, "Positive H1 local completion is still owed.")
+        require(threading.current_thread() is threading.main_thread() and threading.enumerate() == [threading.current_thread()],
+                "State/output/ACK/helper worker threads are not all joined.")
+        import asyncio
+        from arbol_claude_driver.state import State
+        require(not State._open, "A real local State guard remains open before finish.")
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise SpanFailure("An active local event loop remains before terminal finish.")
+        self.finish_code = self._finish_source()
+        self.saved_fd = self.admission.lease
+        self.saved_identity = self._original_lease()
+        self.saved_thread = threading.get_ident()
+        self.saved_pid = os.getpid()
+        context = self.admission.context
+        require(context["process"] == process_identity(self.saved_pid)
+                and {key: context["parent"][key] for key in ("pid", "startedAt")} == process_identity(os.getppid()),
+                "Original Suite/provider process identities changed.")
+        base_raw = self.fixture.root.read("phase-report.json", limit=_DOCUMENT_LIMIT)
+        local_raw = self.fixture.root.read("local-results.json", limit=_DOCUMENT_LIMIT)
+        span_raw = self.fixture.root.read("helper-span.json", limit=16 * 1024)
+        base, local, span = _document(base_raw, _DOCUMENT_LIMIT), _document(local_raw, _DOCUMENT_LIMIT), _document(span_raw, 16 * 1024)
+        fields(base, "version kind component build payloadSha256 invocation writer contextSha256 selected pendingExternal inventorySha256")
+        fields(local, "version kind component inventorySha256 selectedSha256 h1CaseId rows")
+        fields(span, "version kind case component phaseReportSha256 localResultsSha256 inventorySha256 suite helper actorReadySha256 admissionLock pendingExternal")
+        require(base == {"version": 1, "kind": "abr38-inner-phase-only", "component": COMPONENT,
+                         "build": self.admission.payload.build, "payloadSha256": self.admission.payload.digest,
+                         "invocation": context["invocation"], "writer": context["writer"],
+                         "contextSha256": self.admission.context_digest, "selected": list(self.results.order),
+                         "pendingExternal": list(self.results.pending_external),
+                         "inventorySha256": self.results.inventory_digest}, "Original base report changed.")
+        require(local == {"version": 1, "kind": "abr38-helper-span-local-results", "component": COMPONENT,
+                          "inventorySha256": self.results.inventory_digest,
+                          "selectedSha256": sha256(_array_bytes(self.results.order)), "h1CaseId": H1_ID,
+                          "rows": self.results.rows}, "Original provisional local-results changed.")
+        h1_context, h1_context_raw, ready_raw = self.h1.helper_context, self.h1.helper_context_raw, self.h1.ready_raw
+        if h1_context is None or h1_context_raw is None or ready_raw is None or self.saved_identity is None:
+            raise SpanFailure("Original positive H1 source/participant evidence is missing.")
+        require(span == {"version": 1, "kind": "abr38-preterminal-helper-span", "case": self.fixture.case,
+                         "component": COMPONENT, "phaseReportSha256": sha256(base_raw),
+                         "localResultsSha256": sha256(local_raw), "inventorySha256": self.results.inventory_digest,
+                         "suite": {"invocation": context["invocation"], "writer": context["writer"],
+                                   "contextSha256": self.admission.context_digest, **context["process"]},
+                         "helper": {"entry": ACTOR, "invocation": h1_context["invocation"],
+                                    "writer": h1_context["writer"], "handoff": h1_context["handoff"],
+                                    "contextSha256": sha256(h1_context_raw), **h1_context["process"]},
+                         "actorReadySha256": sha256(ready_raw),
+                         "admissionLock": {"device": self.saved_identity[0], "inode": self.saved_identity[1]},
+                         "pendingExternal": list(self.results.pending_external)}
+                and self.fixture.root.read("actor-ready.json") == ready_raw,
+                "Original provisional H1 report/readiness changed.")
+        require(len(completed_rows) == len(self.results.order), "Full completed local result schedule is incomplete.")
+        helpers = self._graph(witnesses, expected_entries)
+        require(sum(witness.child is self.h1.child for witness in witnesses) == 1,
+                "The one actual positive H1 helper is missing or duplicated.")
+        rows: list[Object] = []
+        evidence_directory = self.fixture.directories[-1]
+        for index, (expected_id, result, provisional) in enumerate(zip(self.results.order, completed_rows,
+                                                                      self.results.rows, strict=True)):
+            require(result.case_id == expected_id and result.status == "passed" and result.evidence is not None,
+                    "An actual full ordered local result is unfinished/failed/skipped/unavailable.")
+            raw = result.evidence
+            if raw is None:
+                raise AssertionError
+            require(0 < len(raw) <= 65536, "Actual completed callback evidence is missing or unbounded.")
+            if expected_id != H1_ID:
+                require(sha256(raw) == provisional["resultSha256"]
+                        and raw == evidence_directory.read(f"{index:04d}.result", limit=65536),
+                        "Original completed local callback evidence changed.")
+            else:
+                require(raw != evidence_directory.read(f"{index:04d}.result", limit=65536),
+                        "Provisional H1 preconditions were substituted for actual positive completion.")
+            self.fixture.retain(f"terminal-local-{index:04d}.result", raw, limit=65536)
+            rows.append({"id": expected_id, "resultSha256": sha256(raw)})
+        for index, witness in enumerate(witnesses):
+            for suffix, raw in (("context", witness.context_raw), ("terminal", witness.terminal_raw),
+                                ("result", witness.result_raw), ("ack", witness.ack_raw)):
+                self.fixture.retain(f"terminal-helper-{index:04d}.{suffix}", raw, limit=65536 if suffix == "result" else 4096)
+        settled = {"version": 1, "kind": "abr38-terminal-close-settled", "component": COMPONENT,
+                   "inventorySha256": self.results.inventory_digest,
+                   "selectedSha256": sha256(_array_bytes(self.results.order)), "rows": rows,
+                   "helpers": helpers, "pendingExternal": list(self.results.pending_external)}
+        settled_digest = self.fixture.retain("terminal-close-settled.json", canonical(settled), limit=_DOCUMENT_LIMIT)
+        own_identity = self.saved_identity
+        if own_identity is None:
+            raise AssertionError
+        intent = {"version": 1, "kind": "abr38-terminal-close-intent", "case": self.fixture.case,
+                  "component": COMPONENT, "tuplePinsSha256": tuple_pins_sha256,
+                  "phaseReportSha256": sha256(base_raw), "settledSha256": settled_digest,
+                  "suite": {"invocation": context["invocation"], "writer": context["writer"],
+                            "handoff": context["handoff"], "contextSha256": self.admission.context_digest,
+                            **context["process"]},
+                  "provider": {key: context["parent"][key] for key in ("pid", "startedAt")},
+                  "admissionLock": {"device": own_identity[0], "inode": own_identity[1]},
+                  "ownLease": {"fd": self.saved_fd, "device": own_identity[0], "inode": own_identity[1]},
+                  "closeSite": "claude-original-admission-close"}
+        intent_digest = self.fixture.retain("terminal-close-intent.json", canonical(intent), limit=16 * 1024)
+        self.streams.require_no_extra()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        armed = canonical({"version": 1, "kind": "terminal-close-armed", "case": self.fixture.case,
+                           "intentSha256": intent_digest})
+        view = memoryview(armed)
+        notification_end = time.monotonic() + 5
+        while view:
+            require(bool(select.select([], [self.streams.control[1]], [], _remaining(notification_end))[1]),
+                    "Terminal armed notification expired.")
+            written = os.write(self.streams.control[1], view)
+            require(written > 0, "Terminal armed notification made no progress.")
+            view = view[written:]
+        # All output/data/directory cleanup precedes the genuine owning finish.
+        self.streams.close()
+        self.fixture.close()
+        require(self._original_lease() == self.saved_identity and os.close is self.real_close,
+                "Original admission description/function changed before its one-use interception.")
+        os.close = self.wrapper
+        self.armed = True
+
+    def _close(self, fd: int) -> None:
+        if type(fd) is not int or fd != self.saved_fd:
+            return self.real_close(fd)
+        require(self.finish_may_have_begun and not self.intercepted and os.getpid() == self.saved_pid
+                and threading.get_ident() == self.saved_thread and self._original_lease() == self.saved_identity
+                and sys._getframe(1).f_code is self.finish_code
+                and sys._getframe(1).f_locals.get("self") is self.admission,
+                "Original-close interception identity/source/thread is unavailable.")
+        self.intercepted = True
+        stop_error: BaseException | None = None
+        try:
+            os.kill(self.saved_pid, signal.SIGSTOP)
+        except BaseException as error:
+            stop_error = error
+        finally:
+            # No State, metadata, report, notification or application output.
+            # Real original close runs exactly once, including STOP failure.
+            try:
+                os.close = self.real_close
+            finally:
+                self.close_attempted = True
+                try:
+                    self.real_close(fd)
+                    self.close_returned = True
+                except BaseException as close_error:
+                    if stop_error is not None:
+                        close_error.add_note(f"Self-STOP also failed: {stop_error!r}.")
+                    raise
+        if stop_error is not None:
+            raise stop_error
+
+    def __exit__(self, kind: type[BaseException] | None, error: BaseException | None,
+                 trace: TracebackType | None) -> Literal[False]:
+        if not self.armed:
+            # Without positive settled evidence, no finish can honestly certify
+            # all local work. Preserve its actual failed writer/unknown custody.
+            cleanup_errors: list[BaseException] = []
+            for close in (self.streams.close, self.fixture.close):
+                try:
+                    close()
+                except BaseException as cleanup:
+                    cleanup_errors.append(cleanup)
+                    if error is not None:
+                        error.add_note(f"Unarmed terminal scope cleanup failed: {cleanup!r}.")
+            sys.excepthook = self.old_exception_hook
+            if error is not None:
+                self.actual_error = (BaseExceptionGroup("Unarmed body and independent cleanup failures.",
+                                                       [error, *cleanup_errors]) if cleanup_errors else error)
+                return False  # Preserve the original body exception and its existing chain.
+            failure = SpanFailure("Terminal scope never armed; preserve incomplete closed recovery obligations.")
+            if cleanup_errors:
+                group = BaseExceptionGroup("All independent unarmed cleanup failures.", cleanup_errors)
+                self.actual_error = group
+                raise failure from group
+            raise failure
+        status = 2
+        self.finish_may_have_begun = True
+        try:
+            require(not self.finish_called, "Terminal scope cannot finish twice.")
+            self.finish_called = True
+            self.admission.finish()
+            if error is None and self.intercepted and self.close_attempted and self.close_returned and self.admission.closed:
+                status = 0
+        except BaseException as actual_error:
+            self.actual_error = actual_error
+        finally:
+            if os.close is self.wrapper:
+                os.close = self.real_close
+            elif os.close is not self.real_close:
+                status = 2
+            # The sole owning context ends the Suite. No bootstrap handler,
+            # finalizer or outer context gets a post-finish diagnostic chance.
+            os._exit(status)
