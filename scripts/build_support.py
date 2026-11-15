@@ -10,6 +10,10 @@ import re
 import subprocess
 import sys
 import tomllib
+import tarfile
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +52,23 @@ def source_provenance(root: Path = ROOT) -> dict[str, str | bool]:
         return subprocess.run(["git", *arguments], cwd=root, check=True, capture_output=True, text=True, timeout=15).stdout.strip()
 
     return {"repository": str(root.resolve()), "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
-            "commit": git("rev-parse", "HEAD"), "uncommittedChanges": bool(git("status", "--porcelain"))}
+            "commit": git("rev-parse", "HEAD"), "tree": git("rev-parse", "HEAD^{tree}"), "uncommittedChanges": bool(git("status", "--porcelain"))}
+
+
+@contextmanager
+def committed_source(provenance: dict[str, str | bool]) -> Iterator[Path]:
+    if provenance.get('uncommittedChanges') is not False:
+        raise ValueError('Packaging requires clean committed source input.')
+    with tempfile.TemporaryDirectory(prefix='arbol-driver-source-') as temporary:
+        folder = Path(temporary)
+        archive = folder / 'source.tar'
+        subprocess.run(['git', 'archive', '--format=tar', '--output', str(archive), str(provenance['commit'])],
+                       cwd=ROOT, check=True, capture_output=True, timeout=30)
+        source = folder / 'source'
+        source.mkdir(mode=0o700)
+        with tarfile.open(archive) as bundle:
+            bundle.extractall(source, filter='data')
+        yield source
 
 
 def target() -> str:
@@ -64,12 +84,16 @@ def build_folder(candidate: str | None = None) -> tuple[Path, str | None]:
         raise ValueError("Set ARBOL_BUILD_DIR or --candidate to an absolute Build folder.")
     folder = Path(directory).resolve(strict=True)
     if candidate is not None:
+        if any(folder.iterdir()):
+            raise ValueError("A static candidate destination must be empty.")
         if (folder / "build.json").exists():
             raise ValueError("A development candidate cannot replace a numbered Build.")
         return folder, None
     number = os.environ.get("ARBOL_BUILD_NUMBER", "")
     if not BUILD_NUMBER.fullmatch(number):
         raise ValueError("ARBOL_BUILD_NUMBER must be lower-case hexadecimal without a leading zero.")
+    if folder.name != number or folder.parent.name != COMPONENT:
+        raise ValueError("A numbered payload must use its exact registered component/Build root.")
     record = read_object(folder / "build.json")
     version, _ = metadata()
     if record.get("component") != COMPONENT or record.get("build") != number or record.get("packageVersion") != version:

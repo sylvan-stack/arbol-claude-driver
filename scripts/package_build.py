@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import shutil
@@ -16,7 +15,8 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_support import COMPONENT, ENTRY, ROOT, build_folder, digest, metadata, source_provenance, target  # noqa: E402
+from driver_payload import canonical, emit, freeze, publish  # noqa: E402
+from build_support import COMPONENT, ENTRY, ROOT, build_folder, digest, metadata, source_provenance, target, committed_source  # noqa: E402
 
 
 def archive(distribution: dict[str, Any]) -> Path:
@@ -47,62 +47,90 @@ def archive(distribution: dict[str, Any]) -> Path:
 
 def package(candidate: str | None) -> Path:
     folder, number = build_folder(candidate)
-    version, pin = metadata()
+    provenance = source_provenance()
+    if provenance['uncommittedChanges'] is not False:
+        raise ValueError('Refusing to package dirty source.')
     if folder == ROOT or folder in ROOT.parents or ROOT in folder.parents:
-        raise ValueError("The Build folder must not overlap its source checkout.")
-    if (folder / "package-manifest.json").exists() or (folder / "runtime").exists():
-        raise ValueError("Refusing to overwrite an existing packaged program.")
-    selected = target()
-    distribution = pin["distributions"][selected]
-    compressed = archive(distribution)
-    runtime = folder / "runtime"
-    runtime.mkdir(mode=0o700)
-    # The original install_only archive is relocatable; a uv-created venv is not.
-    with tarfile.open(compressed, "r:gz") as bundle:
-        bundle.extractall(runtime, filter="data")
-    interpreter = runtime / "python/bin/python3.14"
-    probe = subprocess.run([str(interpreter), "-I", "-c", "import platform; print(platform.python_version())"],
-                           check=True, capture_output=True, text=True, cwd=folder)
-    if probe.stdout.strip() != pin["version"]:
-        raise ValueError("The extracted interpreter does not match the pinned Python version.")
-    package_name = COMPONENT.replace("-", "_")
-    (folder / "src").mkdir()
-    shutil.copytree(ROOT / "src" / package_name, folder / "src" / package_name,
-                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    shutil.copytree(ROOT / "tests", folder / "tests", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    for name in ("package.json", "pyproject.toml", ".python-version", "uv.lock", "README.md"):
-        shutil.copy2(ROOT / name, folder / name)
-    scripts = folder / "scripts"
-    scripts.mkdir()
-    for source in (ROOT / "scripts").iterdir():
-        if source.suffix in (".py", ".json"):
-            shutil.copy2(source, scripts / source.name)
-    fixtures = folder / "test"
-    fixtures.mkdir()
-    for source in (ROOT / "test").iterdir():
-        if source.is_file() and (source.suffix in (".json", ".txt") or source.name.startswith("conformance-")):
-            shutil.copy2(source, fixtures / source.name)
-    binary = folder / "bin"
-    binary.mkdir()
-    shutil.copy2(ROOT / "bin/entry.py", binary / "entry.py")
-    executable = folder / ENTRY
-    executable.write_text(
-        '#!/bin/sh\ndirectory=${0%/*}\n[ "$directory" != "$0" ] || directory=.\n'
-        'root=$(CDPATH= cd -- "$directory/.." && pwd -P) || exit 1\n'
-        'exec "$root/runtime/python/bin/python3.14" -I "$root/bin/entry.py" "$@"\n', encoding="utf-8")
-    executable.chmod(0o755)
-    manifest = {
-        "format": 1, "component": COMPONENT, "packageVersion": version, "entry": ENTRY,
-        "build": number or "0", "candidate": number is None,
-        "source": source_provenance(),
-        "python": {"version": pin["version"], "target": selected, "provider": pin["provider"],
-                   "release": pin["release"], "archiveUrl": distribution["url"],
-                   "archiveSha256": distribution["sha256"], "executable": "runtime/python/bin/python3.14",
-                   "executableSha256": digest(interpreter)},
-        "files": {str(path.relative_to(folder)): digest(path) for path in sorted(folder.rglob("*"))
-                  if path.is_file() and runtime not in path.parents and path.name not in ("build.json", "build.log")},
-    }
-    (folder / "package-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        raise ValueError('The Build folder must not overlap its source checkout.')
+    payload = folder / 'driver-payload'
+    if payload.exists():
+        raise ValueError('Refusing to overwrite a preserved payload or failed candidate.')
+    folder.chmod(0o700)
+    payload.mkdir(mode=0o700)
+    with committed_source(provenance) as source_root:
+        version, pin = metadata(source_root)
+        selected = target()
+        distribution = pin['distributions'][selected]
+        compressed = archive(distribution)
+        runtime = payload / 'runtime'
+        runtime.mkdir(mode=0o700)
+        with tarfile.open(compressed, 'r:gz') as bundle:
+            bundle.extractall(runtime, filter='data')
+        interpreter = runtime / 'python/bin/python3.14'
+        # The only executable packaging observation is the pinned interpreter's
+        # stdlib version. No Driver/helper, admission, gate or provider runs.
+        probe = subprocess.run([str(interpreter), '-ISB', '-c', 'import sys;print(".".join(map(str,sys.version_info[:3])))'],
+                               check=True, capture_output=True, text=True, cwd=payload)
+        if probe.stdout.strip() != pin['version']:
+            raise ValueError('The extracted interpreter does not match the pinned Python version.')
+        (payload / 'src').mkdir(mode=0o700)
+        shutil.copytree(source_root / 'src' / COMPONENT.replace('-', '_'), payload / 'src' / COMPONENT.replace('-', '_'),
+                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        shutil.copytree(source_root / 'tests', payload / 'tests', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        for name in ('package.json', 'pyproject.toml', '.python-version', 'uv.lock', 'README.md'):
+            shutil.copy2(source_root / name, payload / name)
+        scripts = payload / 'scripts'
+        scripts.mkdir(mode=0o700)
+        for item in (source_root / 'scripts').iterdir():
+            if item.suffix in ('.py', '.json'):
+                shutil.copy2(item, scripts / item.name)
+        fixtures = payload / 'test'
+        fixtures.mkdir(mode=0o700)
+        for item in (source_root / 'test').iterdir():
+            if item.is_file() and (item.suffix in ('.json', '.txt') or item.name.startswith('conformance-')):
+                shutil.copy2(item, fixtures / item.name)
+        binary = payload / 'bin'
+        binary.mkdir(mode=0o700)
+        for name in ('entry.py', 'metadata-helper.py'):
+            shutil.copy2(source_root / 'bin' / name, binary / name)
+        executable = payload / ENTRY
+        executable.write_text(
+            '#!/bin/sh\ndirectory=${0%/*}\n[ "$directory" != "$0" ] || directory=.\n'
+            'directory=$(CDPATH= cd -P -- "$directory" && pwd -P) || exit 1\nroot=${directory%/*}\n'
+            'exec "$root/runtime/python/bin/python3.14" -ISB "$root/bin/entry.py" "$@"\n', encoding='utf-8')
+        executable.chmod(0o755)
+        manifest = {
+            'format': 1, 'component': COMPONENT, 'packageVersion': version, 'entry': ENTRY,
+            'build': number, 'candidate': number is None, 'source': provenance,
+            'python': {'version': pin['version'], 'target': selected, 'provider': pin['provider'],
+                       'release': pin['release'], 'archiveUrl': distribution['url'], 'archiveSha256': distribution['sha256'],
+                       'executable': 'runtime/python/bin/python3.14', 'executableSha256': digest(interpreter)},
+            'files': {str(path.relative_to(payload)): digest(path) for path in sorted(payload.rglob('*')) if path.is_file()},
+        }
+        publish(payload / 'package-manifest.json', canonical(manifest))
+    if source_provenance() != provenance:
+        raise ValueError('Source changed during packaging; the failed candidate is preserved.')
+    # All data/provenance bytes settle before M/D. Read-only descendants also
+    # prevent old gate interpreter flags from adding caches into the M tree.
+    freeze(payload)
+    roots = ['runtime/python/lib/python3.14', 'runtime/python/lib/python3.14/lib-dynload', 'src']
+    declaration = emit(payload, component=COMPONENT, build=number, commit=str(provenance['commit']), tree=str(provenance['tree']),
+                       interpreter='runtime/python/bin/python3.14', entry='bin/entry.py',
+                       helpers=['bin/metadata-helper.py'], import_roots=roots)
+    aliases = ('runtime', 'src', 'tests', 'test', 'scripts', 'bin', 'package.json', 'pyproject.toml',
+               '.python-version', 'uv.lock', 'README.md', 'package-manifest.json')
+    for name in aliases:
+        path = folder / name
+        if os.path.lexists(path):
+            raise ValueError('Refusing to replace an existing compatibility path.')
+        path.symlink_to('driver-payload/' + name, target_is_directory=(payload / name).is_dir())
+    if number is None:
+        publish(folder / 'driver-payload-inputs.json', canonical({
+            'version': 1, 'kind': 'driver-static-input', 'registeredBuildRequired': True,
+            'source': {'commit': provenance['commit'], 'tree': provenance['tree']},
+            'runtime': manifest['python'], 'payloadManifestSha256': declaration['payloadManifestSha256'],
+            'declarationInputs': {key: value for key, value in declaration.items() if key not in ('version', 'kind')},
+            'compatibilityPaths': {name: 'driver-payload/' + name for name in aliases}}))
     return folder
 
 
@@ -115,7 +143,7 @@ def main() -> int:
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         print(f"Cannot package {COMPONENT}: {error}", file=sys.stderr)
         return 1
-    print(f"Packaged {COMPONENT} in {folder}")
+    print(f"Packaged {COMPONENT} inputs in {folder}; no acceptance issued")
     return 0
 
 
