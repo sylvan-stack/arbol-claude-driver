@@ -19,7 +19,7 @@ from .admission import (
 from .core import Command, Failure
 from .identity import canonical_id, pending, private_file, root_identity, sidecar, state_format
 from .identity_protocol import (
-    Authority, MANIFEST_LIMIT, MAX_ENTRIES, Object, Payload, canonical, canonical_uuid, decode, fields, natural, physical, private_directory,
+    Authority, LIMIT, MANIFEST_LIMIT, MAX_ENTRIES, Object, Payload, canonical, canonical_uuid, decode, fields, natural, physical, private_directory,
     publish, publish_bytes, read, read_bytes, refuse, remove, sha256, sync_directory, valid_hash, valid_token, validate,
 )
 
@@ -592,9 +592,44 @@ class Maintenance:
         if current not in (marker, {**marker, 'phase': 'complete'}):
             refuse()
         publish(directory / 'identity-maintenance.json', {**marker, 'phase': 'complete'})
-        # Leaf16 adds the exact external maintenance result tuple after all
-        # four operation implementations exist. No acceptance is issued here.
-        return {'version': 1, 'format': 2, 'generation': self.context['generation']}
+        result = self.result()
+        self.validate_result(result)
+        return result
+
+    def result(self) -> Object:
+        maintenance = {key: self.context[key] for key in
+                       ('component', 'session', 'epoch', 'operation', 'attempt', 'payloadSha256')}
+        maintenance['stateDirectorySha256'] = sha256(str(self.command.options['state-dir']).encode('utf-8'))
+        if self.context['operation'] == 'identity-recover':
+            maintenance['subscription'] = self.context['subscription']
+        result = {'version': 1, 'format': 2, 'generation': self.context['generation'], 'maintenance': maintenance}
+        if len(canonical(result)) > LIMIT:
+            refuse()
+        return result
+
+    def validate_result(self, result: Object) -> None:
+        self.check()
+        directory = Path(str(self.command.options['state-dir']))
+        if result != self.result() or state_format(directory) != 2 or root_identity(directory) != self.context['generation']:
+            refuse()
+        marker = local_marker(read(directory / 'identity-maintenance.json'))
+        expected = {'version': 1, 'component': COMPONENT, 'session': self.context['session'], 'epoch': self.context['epoch'],
+                    'operation': self.context['operation'], 'attempt': self.context['attempt'],
+                    'payloadSha256': self.payload.digest, 'generation': self.context['generation'], 'phase': 'complete',
+                    'sourceSha256': self.operation()['sourceSha256'], 'backupSha256': marker['backupSha256']}
+        if marker != expected or (directory / 'identity-upgrade.json').exists():
+            refuse()
+        archive = Archive.load(Path(str(self.command.options['backup'])) / 'before')
+        if archive.digest != marker['backupSha256']:
+            refuse()
+        for name in metadata_names(directory):
+            if not name.endswith('/identity-pending.json'):
+                continue
+            relevant = self.context['operation'] != 'identity-recover' or name == f"subscriptions/{self.context['subscription']}/identity-pending.json"
+            if relevant and os.path.lexists(directory / name):
+                refuse()
+        # Do not publish provider result/control or release either exclusive
+        # description. The registered supervisor owns acknowledgement/reopen.
 
     def convert(self, directory: Path, archive: Archive, backup: Path) -> None:
         journal_path = directory / 'identity-upgrade.json'

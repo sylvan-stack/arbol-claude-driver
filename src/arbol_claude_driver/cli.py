@@ -194,6 +194,7 @@ def administrative_entry(admission: Maintenance) -> None:
     from .identity_protocol import LIMIT, canonical
     try:
         result = asyncio.run(admission.execute())
+        admission.validate_result(result)
         raw = canonical(result)
         if len(raw) > LIMIT:
             raise Failure('internal', 'Maintenance result exceeds its bound.')
