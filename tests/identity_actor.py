@@ -7,6 +7,16 @@ import sys
 import os
 
 
+# This belongs to this fixed actor process, never control data or metadata.
+# It is set before the real owning finish call and is never cleared.
+_FINISH_MAY_HAVE_BEGUN = False
+
+
+def _preterminal_diagnostic(raw: bytes) -> None:
+    if not _FINISH_MAY_HAVE_BEGUN:
+        os.write(2, raw)
+
+
 class ActorFailure(ValueError):
     pass
 
@@ -233,6 +243,8 @@ def _lease_hold(admission: Admission, channel: Socket, case: str) -> None:
 
 
 def _bootstrap() -> int:
+    global _FINISH_MAY_HAVE_BEGUN
+
     script = os.path.abspath(__file__)
     root = os.path.dirname(os.path.dirname(script))
     if (not sys.flags.isolated or not sys.flags.no_site or not sys.flags.dont_write_bytecode
@@ -242,7 +254,7 @@ def _bootstrap() -> int:
             or any(not _inside(path, root) for path in (sys.executable, sys.prefix, sys.base_prefix,
                                                        sys.exec_prefix, sys.base_exec_prefix, *sys.path))
             or os.__spec__ is None or os.__spec__.origin != "frozen"):
-        os.write(2, b"H1 helper requires the fixed isolated admitted payload.\n")
+        _preterminal_diagnostic(b"H1 helper requires the fixed isolated admitted payload.\n")
         return 2
     # Standard-library imports now resolve only within the bundled runtime.
     import json
@@ -314,7 +326,7 @@ def _bootstrap() -> int:
             raw_result = canonical({"version": 1, "kind": "actor-result", "case": case,
                                     "action": "lease-hold", "outcome": "refused"})
             os.write(1, raw_result)
-            os.write(2, b"H1 local action failed; preserve custody and private evidence.\n")
+            _preterminal_diagnostic(b"H1 local action failed; preserve custody and private evidence.\n")
             return 1
         raw_result = canonical({"version": 1, "kind": "actor-result", "case": case,
                                 "action": "lease-hold", "outcome": "completed"})
@@ -322,16 +334,64 @@ def _bootstrap() -> int:
         _require(written == len(raw_result), "H1 final result output was incomplete.")
         # All state/loop/control/directory resources and final output are done.
         # Only the genuine API can publish this actor's terminal record.
+        _FINISH_MAY_HAVE_BEGUN = True
         admission.finish()
         return 0
     except BaseException:
-        os.write(2, b"H1 helper unavailable; preserve the actual failed admission.\n")
+        if _FINISH_MAY_HAVE_BEGUN:
+            # Keep the actual API exception/disposition. The standalone owner
+            # converts it to a quiet unsuccessful exit, never another output.
+            raise
+        _preterminal_diagnostic(b"H1 helper unavailable; preserve the actual failed admission.\n")
         return 2
     finally:
+        original = sys.exception()
+        cleanup_errors: list[BaseException] = []
         if channel is not None:
-            channel.close()
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_alarm)
+            try:
+                channel.close()
+            except BaseException as error:
+                cleanup_errors.append(error)
+        try:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+        except BaseException as error:
+            cleanup_errors.append(error)
+        try:
+            signal.signal(signal.SIGALRM, previous_alarm)
+        except BaseException as error:
+            cleanup_errors.append(error)
+        if cleanup_errors:
+            if original is not None:
+                # Exception notes are in-memory only: no post-finish file,
+                # application output, State access or custody reconstruction.
+                for cleanup_error in cleanup_errors:
+                    original.add_note(f"Actor final resource cleanup failed: {cleanup_error!r}.")
+            else:
+                raise BaseExceptionGroup("Actor final resource cleanup failed.", cleanup_errors)
+
+
+def _standalone() -> None:
+    status = 2
+    try:
+        status = _bootstrap()
+    except BaseException:
+        _preterminal_diagnostic(b"H1 helper failed before a complete standalone exit.\n")
+    finally:
+        if _FINISH_MAY_HAVE_BEGUN:
+            # Real finish/cleanup failure keeps status2. Normal status0 exists
+            # only after finish AND finally return. Bypass Python finalizers
+            # and automatic tracebacks at the post-finish process boundary.
+            os._exit(status)
+    raise SystemExit(status)
+
+
+def _unhandled(kind: type[BaseException], error: BaseException, trace: TracebackType | None) -> None:
+    # A final footer/interrupt escape must not invoke Python's stderr traceback
+    # printer after finish may have begun. Preterminal diagnostics stay bounded.
+    try:
+        _preterminal_diagnostic(b"H1 helper escaped its bounded standalone owner.\n")
+    finally:
+        os._exit(2)
 
 
 # No runtime application imports, test-root insertion or source fallback occurs
@@ -341,8 +401,9 @@ if __name__ != "__main__":
     if TYPE_CHECKING:
         from pathlib import Path
         from socket import socket as Socket
-        from types import FrameType
+        from types import FrameType, TracebackType
         from arbol_claude_driver.admission import Admission
 
 if __name__ == "__main__":
-    raise SystemExit(_bootstrap())
+    sys.excepthook = _unhandled
+    _standalone()
