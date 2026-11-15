@@ -72,9 +72,9 @@ def bootstrap() -> None:
             from arbol_claude_driver.core import parse_arguments
             admission = Maintenance.receive(payload, parse_arguments(sys.argv[1:]), dict(os.environ))
         else:
+            # receive binds main to D.entry and helper to this exact D.helpers
+            # file, with its own process-bound handshake and independent lease.
             admission = Admission.receive(payload, entry, dict(os.environ))
-            if admission.context['role'] != 'main':
-                refuse()
         # Keep the caller's vendor environment, remove only admission authority.
         # The admitted object, never a fresh environment lookup, owns cleanup.
         for key in AUTHORITY_ENV:
