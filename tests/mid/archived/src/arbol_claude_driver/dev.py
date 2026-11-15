@@ -10,6 +10,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
+from .admission import current_admission
 from .core import Env, Failure, Record, clean_environment, compact, now, safe_failure, loads
 from .history import encode_folder, session_lines
 from .processes import ACTUAL_HOME, child_command, close_pipes, inspect_tool, kill_group, owner_mcp_arguments, owner_skills, python_launcher, require_tool, spawn, wait_exit
@@ -187,7 +188,6 @@ async def live_check(build_only: bool, subscriptions: Subscriptions, inherited: 
     temp_root = subscriptions.state.directory / 'tmp'
     private_directory(temp_root)
     directory = Path(tempfile.mkdtemp(prefix='build-check-' if build_only else 'live-check-', dir=temp_root))
-    cli = Path(__file__).resolve().parents[2] / 'bin/arbol-claude-driver'
     env = {**clean_environment(inherited, inherited.get('HOME', ACTUAL_HOME)), 'PATH': str(Path(sys.executable).parent) + ':' + str(Path(program).parent) + ':/usr/bin:/bin', **({'ARBOL_TEST_TIME_SCALE': inherited['ARBOL_TEST_TIME_SCALE']} if inherited.get('ARBOL_TEST_TIME_SCALE') else {})}
     checks: list[Record] = []
     report: Record = {'check': 'dev.build-check' if build_only else 'dev.live-check', 'at': now(), 'toolVersion': tool['version'], 'subscriptionId': identifier, 'model': 'haiku', 'turnsAttempted': 0, 'inferenceRequests': 0, 'tokenUsage': {}, 'usageBefore': before, 'checks': checks}
@@ -195,7 +195,11 @@ async def live_check(build_only: bool, subscriptions: Subscriptions, inherited: 
         await check_account(subscriptions, identifier)
         request = directory / (str(uuid.uuid4()) + '.json')
         write_json(request, {'subscriptionId': identifier, 'model': 'haiku', 'tools': 'all' if tools else 'none', **({'workingDirectory': str(directory)} if tools or chat else {}), **({'chatSessionId': chat} if chat else {}), 'history': history or [], 'input': {'role': 'user', 'text': prompt}, 'limits': {'totalSeconds': 60}})
-        child = await spawn(str(cli), ['run', '--request', str(request), '--state-dir', str(subscriptions.state.directory), *(['--control'] if control or stop else [])], env, directory)
+        child = await current_admission().spawn_helper_async(
+            ['run', '--request', str(request), '--state-dir', str(subscriptions.state.directory),
+             *(['--control'] if control or stop else [])],
+            entry='bin/entry.py', environment=env, cwd=directory, limit=4 * 1024 * 1024,
+        )
         assert child.stdin and child.stdout and child.stderr
         report['turnsAttempted'] += 1
         events: list[Record] = []
