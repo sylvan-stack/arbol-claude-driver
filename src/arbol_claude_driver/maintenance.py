@@ -23,7 +23,7 @@ from .identity_protocol import (
     publish, publish_bytes, read, read_bytes, refuse, remove, sha256, sync_directory, valid_hash, valid_token, validate,
 )
 
-from .state import owner_alive, parse_owner, prepare_file
+from .state import State, owner_alive, parse_owner, prepare_file
 
 OPERATIONS = ('upgrade', 'identity-reset', 'restore', 'identity-recover')
 
@@ -545,7 +545,7 @@ class Maintenance:
         self.check()
         return directory
 
-    async def validate_records(self, directory: Path) -> None:
+    async def validate_records(self, directory: Path, *, allow_pending: bool = False) -> None:
         # No account record, native home, credential, settings or chat bytes
         # are read. Only private record-file metadata and owned-work records.
         metadata_names(directory)
@@ -564,8 +564,10 @@ class Maintenance:
                     if os.path.lexists(path):
                         if name == 'identity-pending.json':
                             pending(read(path))
-                            raise Failure('internal', 'Subscription identity settlement must be recovered before this operation.')
-                        sidecar(read(path))
+                            if not allow_pending:
+                                raise Failure('internal', 'Subscription identity settlement must be recovered before this operation.')
+                        else:
+                            sidecar(read(path))
         runs = directory / 'runs'
         if os.path.lexists(runs):
             private_directory(runs)
@@ -740,10 +742,47 @@ class Maintenance:
         publish(checkpoint_path, {**checkpoint, 'phase': 'complete'})
         return result
 
+    async def recover(self, directory: Path, before: Archive, marker: Object) -> Object:
+        identifier = canonical_id(self.context['subscription'])
+        name = f'subscriptions/{identifier}/identity-pending.json'
+        archived = before.content(name)
+        if archived is None:
+            raise Failure('invalid_input', 'Identity recovery requires its preserved pending Subscription journal.')
+        original = pending(decode(archived))
+        if state_format(directory) != 2 or root_identity(directory) != self.context['generation']:
+            refuse()
+        await self.validate_records(directory, allow_pending=True)
+        # This State object supplies only the existing short lock. The verified
+        # exclusive component/local guards remain owned by Maintenance; normal
+        # initialization or credential/native work is never dispatched here.
+        state = State(directory)
+        async with state.lock(identifier, allow_pending=True):
+            self.check()
+            folder = state.subscription(identifier)
+            path = folder / 'identity-pending.json'
+            if os.path.lexists(path):
+                if pending(read(path)) != original:
+                    refuse()
+            else:
+                current = sidecar(read(folder / 'identity.json'))
+                if current != {'version': 1, 'witness': original['witness'], 'state': 'retired'}:
+                    refuse()
+            identity_path = folder / 'identity.json'
+            if os.path.lexists(identity_path):
+                current = sidecar(read(identity_path))
+                if current['state'] == 'active' and current['witness'] != original['witness']:
+                    refuse()
+            # Preserve record/auth/credential references exactly. Repeating an
+            # interrupted retirement is safe; no old active proof can escape.
+            publish(identity_path, {'version': 1, 'witness': original['witness'], 'state': 'retired'})
+            if os.path.lexists(path):
+                remove(path)
+        return self.complete(directory, marker)
+
     async def execute(self) -> Object:
         self.check()
         operation = self.context['operation']
-        if operation not in ('upgrade', 'identity-reset', 'restore'):
+        if operation not in OPERATIONS:
             raise Failure('unsupported', 'This maintenance operation is not available in this source checkpoint.')
         directory = self.acquire_guard()
         if operation == 'identity-reset' and state_format(directory) != 2:
@@ -751,11 +790,21 @@ class Maintenance:
         if operation == 'upgrade' and state_format(directory) == 2 and not (directory / 'identity-upgrade.json').exists():
             if root_identity(directory) != self.context['generation']:
                 refuse()
+        if operation == 'identity-recover':
+            if state_format(directory) != 2 or root_identity(directory) != self.context['generation']:
+                refuse()
+            path = directory / 'subscriptions' / self.context['subscription'] / 'identity-pending.json'
+            local = directory / 'identity-maintenance.json'
+            resumed = local.exists() and local_marker(read(local))['attempt'] == self.context['attempt']
+            if not os.path.lexists(path) and not resumed:
+                raise Failure('invalid_input', 'Identity recovery requires a pending Subscription journal.')
         before, marker, source = self.begin_attempt()
         if operation == 'upgrade':
             return await self.upgrade(directory, before, marker)
         if operation == 'identity-reset':
             return await self.reset(directory, before, marker)
+        if operation == 'identity-recover':
+            return await self.recover(directory, before, marker)
         assert source is not None
         return await self.restore(directory, before, marker, source)
 
