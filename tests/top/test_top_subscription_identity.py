@@ -1,17 +1,216 @@
-"""Prospective final H1 local precondition case; no runner or inventory wiring."""
+"""Prospective local proof and final H1 cases; no runner or inventory wiring."""
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import os
+import re
 import stat
 import unittest
 from dataclasses import dataclass
 from typing import ClassVar
 
-from arbol_claude_driver.identity_protocol import Object, canonical, decode, fields, sha256, valid_hash, valid_token
+from arbol_claude_driver.identity_protocol import (
+    Object, canonical, decode, fields, inspect_process, read_bytes, sha256, token, valid_hash, valid_token,
+)
 from arbol_claude_driver.state import State
 from arbol_claude_driver.subscriptions import Subscriptions
-from identity_support import Directory, Fixture, H1Child, H1_ID, LocalResult, LocalResults, SuiteStreams, require
+from identity_support import (
+    ClaudeCapture, ClaudeInvocation, ClaudeLocalSubject, Directory, Fixture, H1Child, H1_ID,
+    LocalResult, LocalResults, SuiteStreams, require,
+)
+
+
+class LocalIdentityTests(unittest.TestCase):
+    def test_two_implicit_captures_contend_and_a_fresh_invocation_accepts_exact_proof(self) -> None:
+        asyncio.run(self._concurrent_capture())
+
+    async def _concurrent_capture(self) -> None:
+        subject = ClaudeLocalSubject(guarded_settings=True)
+        state = State(subject.state)
+        calls: list[ClaudeInvocation] = []
+        try:
+            state.initialize(subject.fixture.admission)
+            subscriptions = subject.state / "subscriptions"
+            subscriptions.mkdir(mode=0o700)
+            folder = subscriptions / "anthropic"
+            root_before = subject.image(subject.state)
+            try:
+                async with state.lock("anthropic"):
+                    self.assertFalse(os.path.lexists(folder / "identity.json"))
+                    self.assertFalse(os.path.lexists(folder / "record.json"))
+                    for _ in range(2):
+                        calls.append(await subject.spawn("identity", "anthropic"))
+                    witnesses = await self._waiting_at_short_lock(subject, calls)
+                    self.assertFalse(os.path.lexists(folder / "identity.json"))
+                    subject.fixture.retain("observed-contenders.json", canonical({"contenders": witnesses}))
+                async with asyncio.TaskGroup() as group:
+                    captures = [group.create_task(subject.collect(call, f"capture-{index}"))
+                                for index, call in enumerate(calls, 1)]
+            finally:
+                async with asyncio.TaskGroup() as cleanup:
+                    for call in calls:
+                        cleanup.create_task(subject.stop(call))
+            first, second = [self._proof(capture.result(), "anthropic") for capture in captures]
+            self.assertEqual(first, second)
+            saved = read_bytes(folder / "identity.json")
+            self.assertEqual(saved, canonical({"version": 1, "state": "active", "witness": first["witness"]}))
+            self.assertEqual(decode(read_bytes(subject.state / "identity.json")),
+                             {"version": 1, "generation": first["generation"]})
+            self.assertFalse(os.path.lexists(folder / "record.json"))
+            image = subject.image(subject.state)
+            for filename in ("format", "identity.guard", "identity.json"):
+                self.assertEqual(image[filename], root_before[filename])
+            expected = str(first["generation"]) + "." + str(first["witness"])
+            restarted = await subject.request("restarted-exact-expect", "identity", "anthropic", "--expect", expected)
+            self.assertNotIn(restarted.owner, [call.owner for call in calls])
+            self.assertEqual(self._proof(restarted, "anthropic"), first)
+            self.assertEqual(subject.image(subject.state), image)
+        finally:
+            try:
+                state.close()
+            finally:
+                subject.close()
+
+    async def _waiting_at_short_lock(
+        self, subject: ClaudeLocalSubject, calls: list[ClaudeInvocation],
+    ) -> list[Object]:
+        folder = subject.state / "subscriptions/anthropic"
+        lock = folder / "lock"
+        original = read_bytes(lock)
+        self.assertEqual(json.loads(original)["owner"]["pid"], os.getpid())
+        async with asyncio.timeout(8):
+            while True:
+                seen: dict[int, Object] = {}
+                for path in folder.iterdir():
+                    if not re.fullmatch(r"\.write-[0-9a-f-]{36}", path.name):
+                        continue
+                    try:
+                        row = json.loads(read_bytes(path))
+                    except (FileNotFoundError, ValueError):
+                        continue
+                    pid = row.get("owner", {}).get("pid")
+                    if type(pid) is not int or pid == os.getpid():
+                        continue
+                    contender = inspect_process(pid)
+                    if contender is None:
+                        continue
+                    for call in calls:
+                        provider = inspect_process(call.process.pid)
+                        if (provider is not None and provider.owner == call.owner and provider.parent == os.getpid()
+                                and contender.parent == call.process.pid):
+                            seen[call.process.pid] = {"main": contender.owner, "provider": provider.owner}
+                if len(seen) == len(calls):
+                    self.assertEqual(read_bytes(lock), original)
+                    return [seen[call.process.pid] for call in calls]
+                self.assertTrue(all(call.process.returncode is None for call in calls))
+                await asyncio.sleep(0.02)
+
+    def test_legacy_list_keeps_supported_record_and_rejects_retired_aliases(self) -> None:
+        asyncio.run(self._legacy_catalogue())
+
+    @staticmethod
+    def _written_state(subject: ClaudeLocalSubject, marker: bytes) -> Directory:
+        state = Directory.root(subject.state)
+        try:
+            state.exclusive("format", marker)
+            state.exclusive("identity.guard", b"")
+            return state
+        except BaseException:
+            state.close()
+            raise
+
+    async def _legacy_catalogue(self) -> None:
+        subject = ClaudeLocalSubject()
+        try:
+            state = self._written_state(subject, b"1\n")
+            subject.fixture.directories.append(state)
+            subscriptions = state.child("subscriptions", fresh=True)
+            subject.fixture.directories.append(subscriptions)
+            local = subscriptions.child("anthropic-2", fresh=True)
+            subject.fixture.directories.append(local)
+            retired = subscriptions.child("zai", fresh=True)
+            subject.fixture.directories.append(retired)
+            local.exclusive("record.json", canonical({
+                "id": "anthropic-2", "family": "anthropic", "label": "Local record", "auth": "vendor_login",
+                "state": "signed_out", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+            }))
+            retired.exclusive("record.json", canonical({"id": "zai", "family": "zai", "archived": subject.secret}))
+            before = subject.image(subject.state)
+            listed = await subject.request("legacy-list", "list")
+            self.assertEqual((listed.exit, listed.stderr), (0, b""))
+            rows = json.loads(listed.stdout)
+            self.assertEqual([(row["id"], row["state"], row["auth"]) for row in rows],
+                             [("anthropic", "signed_out", "vendor_login"),
+                              ("anthropic-2", "signed_out", "vendor_login")])
+            for selector in ("anthropic", "anthropic-2", "zai", "claude-zai"):
+                refused = await subject.request("legacy-proof-" + selector, "identity", selector)
+                error = self._failure(refused, "invalid_input")
+                if selector in {"zai", "claude-zai"}:
+                    self.assertIn("Pi Driver", error["remedy"])
+                else:
+                    self.assertEqual(error["remedy"],
+                                     "Upgrade Driver state under exclusive maintenance before using Subscription identity.")
+                self.assertEqual(subject.image(subject.state), before)
+        finally:
+            subject.close()
+
+    def test_interrupted_conversion_refuses_list_and_proof_without_recovering(self) -> None:
+        for phase in ("before-format-fence", "after-root-publication"):
+            with self.subTest(phase=phase):
+                asyncio.run(self._interrupted_conversion(phase))
+
+    async def _interrupted_conversion(self, phase: str) -> None:
+        subject = ClaudeLocalSubject()
+        try:
+            late = phase == "after-root-publication"
+            state = self._written_state(subject, b"2\n" if late else b"1\n")
+            subject.fixture.directories.append(state)
+            before = subject.fixture.root.child("historical-before", fresh=True)
+            subject.fixture.directories.append(before)
+            before.exclusive("format", b"1\n")
+            entries = [{"path": name, "present": False, "size": 0, "sha256": None}
+                       for name in ("identity-maintenance.json", "identity-upgrade.json", "identity.json")]
+            entries.insert(0, {"path": "format", "present": True, "size": 2, "sha256": sha256(b"1\n")})
+            manifest = canonical({"version": 1, "kind": "driver-identity-backup", "format": 1, "files": entries})
+            before.exclusive("manifest.json", manifest)
+            generation = token()
+            state.exclusive("identity-upgrade.json", canonical({
+                "version": 1, "from": 1, "to": 2, "generation": generation,
+                "backup": str(before.path), "backupSha256": sha256(manifest),
+            }))
+            if late:
+                state.exclusive("identity.json", canonical({"version": 1, "generation": generation}))
+            archive, images = subject.image(before.path), subject.image(subject.state)
+            self._failure(await subject.request("interrupted-list-" + phase, "list"), "internal")
+            self.assertEqual(subject.image(subject.state), images)
+            self._failure(await subject.request("interrupted-identity-" + phase, "identity", "anthropic"), "internal")
+            self.assertEqual(subject.image(subject.state), images)
+            self.assertEqual(subject.image(before.path), archive)
+        finally:
+            subject.close()
+
+    def _proof(self, capture: ClaudeCapture, selector: str) -> Object:
+        self.assertEqual((capture.exit, capture.stderr), (0, b""))
+        proof = decode(capture.stdout, exact=False)
+        self.assertEqual(set(proof), {"version", "driver", "subscription", "generation", "witness"})
+        self.assertIs(type(proof["version"]), int)
+        self.assertEqual((proof["version"], proof["driver"], proof["subscription"]), (1, "claude", selector))
+        for name in ("generation", "witness"):
+            encoded = proof[name]
+            self.assertRegex(encoded, r"\A[A-Za-z0-9_-]{43}\Z")
+            raw = base64.b64decode(encoded + "=", altchars=b"-_", validate=True)
+            self.assertEqual(len(raw), 32)
+            self.assertEqual(base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii"), encoded)
+        return proof
+
+    def _failure(self, capture: ClaudeCapture, code: str) -> Object:
+        self.assertEqual((capture.exit, capture.stderr), (1, b""))
+        result = decode(capture.stdout, exact=False)
+        self.assertEqual(set(result), {"error"})
+        self.assertEqual(result["error"]["code"], code)
+        return dict(result["error"])
 
 
 @dataclass

@@ -6,6 +6,7 @@ never a complete check result or permission to maintain a subject.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -18,14 +19,17 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import CodeType, TracebackType
 from typing import ClassVar, Literal
 
-from arbol_claude_driver.admission import Admission, HelperHandoff, boot_uuid, normal_context, verify_acceptance
+from arbol_claude_driver.admission import (
+    Admission, HelperHandoff, boot_uuid, current_admission, normal_context, verify_acceptance,
+)
 from arbol_claude_driver.identity_protocol import (
-    Object, canonical, decode, fields, inspect_process, load_payload, process_identity,
+    BUILD, DESCRIPTOR, Object, canonical, decode, fields, inspect_process, load_payload, process_identity,
     read_bytes, sha256, valid_hash, valid_token, validate,
 )
 
@@ -304,6 +308,180 @@ class Fixture:
                 errors.append(error)
         if errors:
             raise BaseExceptionGroup("Fixture descriptor cleanup failed.", errors)
+
+
+@dataclass(frozen=True)
+class ClaudeInvocation:
+    process: asyncio.subprocess.Process
+    owner: Object
+
+
+@dataclass(frozen=True)
+class ClaudeCapture:
+    exit: int
+    stdout: bytes
+    stderr: bytes
+    owner: Object
+
+
+class ClaudeLocalSubject:
+    """Run public local commands in the fixed Suite's isolated candidate registry."""
+
+    secret = "abr38-disposable-claude-sentinel"
+
+    def __init__(self, *, guarded_settings: bool = False) -> None:
+        admission = current_admission()
+        context = _suite_current(admission)
+        require(sys.argv[1:] == ["unit"]
+                and Path(sys.argv[0]) == admission.payload.root / "scripts/check_build.py",
+                "Local proof needs the actual full unit runner.")
+        acceptance = verify_acceptance(admission.authority, admission.payload, context["acceptanceSha256"])
+        require(acceptance["status"] == "candidate", "Local fixtures require the candidate registry.")
+        registry = admission.authority.registry
+        candidates = [folder for folder in (registry / "arbol").iterdir() if BUILD.fullmatch(folder.name)
+                      and (folder / "driver-payload" / DESCRIPTOR).is_file()
+                      and sha256(read_bytes(folder / "driver-payload" / DESCRIPTOR))
+                      == acceptance["providerPayloadSha256"]]
+        require(len(candidates) == 1, "Could not resolve the exact accepted provider.")
+        provider = load_payload(candidates[0] / "driver-payload", "arbol", candidates[0].name)
+        self.prefix = [*provider.prefix, "--qualification-launch", str(registry), COMPONENT,
+                       admission.payload.build, "driver", "--"]
+        self.fixture = Fixture.create(admission, uuid.uuid4().hex)
+        self.state = self.fixture.root.path / "state"
+        try:
+            home = self._child(self.fixture.root, "home")
+            config = self._child(home, ".claude")
+            settings = self._child(home, ".arbol")
+            vendor = self._child(self.fixture.root, "vendor", fresh=False)
+            config.exclusive(".credentials.json", canonical({"fixtureValue": self.secret}))
+            vendor.exclusive("claude", b'#!/bin/sh\nprintf "called\\n" > "${0%/*}/called"\nexit 97\n')
+            descriptor = os.open("claude", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=vendor.descriptor)
+            try:
+                os.fchmod(descriptor, 0o700)
+            finally:
+                os.close(descriptor)
+            settings.exclusive("arbol-claude-driver.json", b"{unusable settings\n" if guarded_settings else
+                               canonical({"toolPath": str(vendor.path / "claude")}))
+            self.environment = {"HOME": str(home.path), "CLAUDE_CONFIG_DIR": str(config.path),
+                                "PATH": str(vendor.path) + ":/usr/bin:/bin", "LC_ALL": "C", "TZ": "UTC"}
+            self.observed_inputs = self.image(home.path)
+            self.vendor_marker = vendor.path / "called"
+            self.home = home.path
+        except BaseException:
+            self.fixture.close()
+            raise
+
+    def _child(self, parent: Directory, name: str, *, fresh: bool = True) -> Directory:
+        directory = parent.child(name, fresh=fresh)
+        self.fixture.directories.append(directory)
+        return directory
+
+    def close(self) -> None:
+        self.fixture.close()
+
+    def check(self) -> None:
+        self.fixture.verify()
+        require(not os.path.lexists(self.vendor_marker), "The public command started the private Claude stand-in.")
+        require(self.image(self.home) == self.observed_inputs, "The public command changed native or settings files.")
+
+    @staticmethod
+    def image(root: Path) -> Object:
+        """Independent bounded byte and inode observations of an owned private tree."""
+        image: Object = {}
+        for folder, subfolders, filenames in os.walk(root, followlinks=False):
+            parent = Path(folder)
+            record = Directory.root(parent)
+            try:
+                image[parent.relative_to(root).as_posix()] = list(record.identity)
+                for name in subfolders:
+                    info = (parent / name).lstat()
+                    _directory(info)
+                for name in filenames:
+                    path = parent / name
+                    info = path.lstat()
+                    raw = record.read(name)
+                    image[path.relative_to(root).as_posix()] = [info.st_dev, info.st_ino, sha256(raw)]
+            finally:
+                record.close()
+            require(len(image) <= 256, "Local proof image exceeded its private fixture bound.")
+        return image
+
+    async def spawn(self, operation: str, *arguments: str) -> ClaudeInvocation:
+        self.check()
+        child = await asyncio.create_subprocess_exec(
+            *self.prefix, "--state-dir", str(self.state), "subscriptions", operation, *arguments,
+            cwd=self.fixture.root.path, env=self.environment, close_fds=True,
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        assert child.stdin is not None
+        child.stdin.close()
+        owner = inspect_process(child.pid)
+        require(owner is not None and owner.parent == os.getpid(), "The provider is no longer our verified child.")
+        assert owner is not None
+        return ClaudeInvocation(child, owner.owner)
+
+    async def stop(self, invocation: ClaudeInvocation) -> None:
+        child = invocation.process
+        if child.returncode is None:
+            observed = inspect_process(child.pid)
+            if observed is not None and observed.owner == invocation.owner and observed.parent == os.getpid():
+                try:
+                    child.terminate()
+                except ProcessLookupError:
+                    pass
+        await asyncio.wait_for(child.wait(), timeout=20)
+
+    async def collect(self, invocation: ClaudeInvocation, name: str) -> ClaudeCapture:
+        child = invocation.process
+        assert child.stdout is not None and child.stderr is not None
+
+        async def drain(stream: asyncio.StreamReader) -> bytes:
+            raw = bytearray()
+            while block := await stream.read(4096):
+                raw.extend(block)
+                require(len(raw) <= 4096, "Public local output exceeded its bound.")
+            return bytes(raw)
+
+        async with asyncio.timeout(100), asyncio.TaskGroup() as group:
+            stdout = group.create_task(drain(child.stdout))
+            stderr = group.create_task(drain(child.stderr))
+            exit_code = group.create_task(child.wait())
+        result = ClaudeCapture(exit_code.result(), stdout.result(), stderr.result(), invocation.owner)
+        require(self.secret.encode() not in result.stdout + result.stderr, "The fixture sentinel escaped.")
+        self._terminal(result.owner)
+        self.fixture.retain(name + ".json", canonical({"exit": result.exit, "owner": result.owner,
+                            "stdoutHex": result.stdout.hex(), "stderrHex": result.stderr.hex()}), limit=32768)
+        self.check()
+        return result
+
+    def _terminal(self, owner: Object) -> None:
+        authority = self.fixture.admission.authority
+        with authority.mutex():
+            roots = list((authority.folder / "writers").iterdir())
+            require(len(roots) <= 4096, "The local writer inventory exceeded its bound.")
+            found: list[list[Object]] = []
+            for directory in roots:
+                rows = list(directory.iterdir())
+                require(len(rows) <= 4096, "A local invocation's writer inventory exceeded its bound.")
+                writers = [decode(read_bytes(row)) for row in rows]
+                for writer in writers:
+                    validate("writer", writer)
+                if any(writer["parent"] is None and
+                       {key: writer[key] for key in ("pid", "startedAt")} == owner for writer in writers):
+                    found.append(writers)
+            require(len(found) == 1 and len(found[0]) == 2 and all(row["phase"] == "terminal" for row in found[0]),
+                    "The public provider and ordinary MAIN must retain terminal records after exit.")
+            root = next(row for row in found[0] if row["parent"] is None)
+            main = next(row for row in found[0] if row["parent"] is not None)
+            require(main["parent"] == root["writer"] and main["invocation"] == root["invocation"],
+                    "The local MAIN is not bound to the observed provider.")
+
+    async def request(self, evidence: str, operation: str, *arguments: str) -> ClaudeCapture:
+        invocation = await self.spawn(operation, *arguments)
+        try:
+            return await self.collect(invocation, evidence)
+        finally:
+            await self.stop(invocation)
 
 
 @dataclass
