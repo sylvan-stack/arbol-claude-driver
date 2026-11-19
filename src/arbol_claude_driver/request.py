@@ -127,7 +127,7 @@ async def read_request(command: Command, settings: Record, first_line: Callable[
     return ValidatedRequest(identifier, subscription, cast(Literal['all', 'none'], tools), history, message, fields)
 
 
-def run_arguments(request: Record, conversation: str, control: bool, resume: bool = False) -> list[str]:
+def run_arguments(request: Record, conversation: str, control: bool, resume: bool = False, *, system_prompt_path: Path | None = None) -> list[str]:
     args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'bypassPermissions', '--system-prompt-snapshot', 'off', '--resume' if resume else '--session-id', conversation]
     if request['tools'] == 'none':
         args += ['--tools', '']
@@ -135,9 +135,13 @@ def run_arguments(request: Record, conversation: str, control: bool, resume: boo
         args += ['--permission-prompt-tool', 'stdio']
     if request.get('workingDirectory') is None:
         args.append('--no-session-persistence')
-    for option, field in [('--model', 'model'), ('--effort', 'effort'), ('--append-system-prompt', 'systemPrompt')]:
+    for option, field in [('--model', 'model'), ('--effort', 'effort')]:
         if field in request:
             args += [option, request[field]]
+    if system_prompt_path is not None:
+        args += ['--append-system-prompt-file', str(system_prompt_path)]
+    elif 'systemPrompt' in request:
+        args += ['--append-system-prompt', request['systemPrompt']]
     for directory in request['additionalDirectories']:
         args += ['--add-dir', directory]
     return args

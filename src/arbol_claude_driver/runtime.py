@@ -17,7 +17,7 @@ from .history import MessageDigest, text_history
 from .processes import ACTUAL_HOME, close_pipes, end_run_groups, inspect_tool, kill_group, owner_mcp_arguments, require_tool, run_launchers, spawn, wait_exit
 from .protocol import RunEvents, RunProtocol, exit_failure
 from .request import read_request, run_arguments, user_record
-from .state import private_directory, process_owner
+from .state import atomic_write, private_directory, process_owner
 from .subscriptions import Subscriptions, is_test
 
 
@@ -93,6 +93,11 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             cancelled = True
             raise Failure('tool_failed', 'The run was stopped.')
         private_directory(temp)
+        system_prompt_path = None
+        system_prompt = request.get('systemPrompt', '')
+        if len(system_prompt.encode('utf-8')) >= 64 * 1024:
+            system_prompt_path = temp / 'system-prompt.txt'
+            atomic_write(system_prompt_path, system_prompt)
         cwd = request.get('workingDirectory', str(temp / 'work'))
         if request.get('workingDirectory') is None:
             private_directory(Path(cwd))
@@ -111,7 +116,11 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             child_env['PATH'] = child_env.get('PATH', '') + os.pathsep + os.pathsep.join(request['searchPath'])
         await chats.prepare(plan, request, home, cwd)
         for attempt in range(2):
-            child = await spawn(str(launcher), [program, *run_arguments(request, plan['conversation'], command.options.get('control') is True, plan['resume']), *owner_args], child_env, cwd)
+            arguments = run_arguments(
+                request, plan['conversation'], command.options.get('control') is True, plan['resume'],
+                system_prompt_path=system_prompt_path,
+            )
+            child = await spawn(str(launcher), [program, *arguments, *owner_args], child_env, cwd)
             assert child.stdin and child.stdout and child.stderr
             stderr = ''
             stop_deadline = None
