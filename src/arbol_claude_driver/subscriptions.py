@@ -14,6 +14,8 @@ import urllib.request
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+from .paths import state_directory
 from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
@@ -260,7 +262,7 @@ def is_test(identifier: str) -> bool:
 
 def keychain_service(directory: Path, home: str = ACTUAL_HOME) -> str:
     path = str(directory.resolve())
-    normal = str((Path(home) / 'Library/Application Support/Arbol/drivers/claude').resolve())
+    normal = str(state_directory(home).resolve())
     service = 'com.sylvan-stack.arbol.claude-driver'
     return service if path == normal else service + '.' + hashlib.sha256(path.encode()).hexdigest()[:12]
 

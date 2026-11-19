@@ -16,13 +16,23 @@ from .admission import Admission
 from .continuity import Runs
 from .core import Failure, build_identity, compact, fixed_wait, parse_arguments, read_settings, retired_route, safe_failure
 from .dev import live_check, probe
-from .identity import canonical_id, parse_expected
+from .identity import canonical_id, ensure_directory, parse_expected
+from .paths import installation_root, state_directory
 from .processes import ACTUAL_HOME, inspect_tool
 from .protocol import Output, RunEvents
 from .runtime import run
 from .standin import stand_in
 from .state import State
 from .subscriptions import Authentication, FAMILIES, Subscriptions, family_id
+
+
+def initialized_state(home: str, override: object, admission: Admission) -> State:
+    default = state_directory(home)
+    state = State(str(override) if override is not None else default)
+    if state.directory == Path(os.path.abspath(default)):
+        ensure_directory(installation_root(home))
+    state.initialize(admission)
+    return state
 
 
 async def input_stream() -> tuple[asyncio.StreamReader, asyncio.ReadTransport | None]:
@@ -76,18 +86,16 @@ async def main(args: list[str], admission: Admission | None = None) -> int:
             canonical_id(identifier)
             expected = parse_expected(str(command.options['expect']) if 'expect' in command.options else None)
             home = os.environ.get('HOME', ACTUAL_HOME)
-            file = Path(home) / '.arbol/arbol-claude-driver.json'
-            state = State(str(command.options.get('state-dir', str(Path(home) / 'Library/Application Support/Arbol/drivers/claude'))))
-            state.initialize(admission)
+            file = installation_root(home) / 'arbol-claude-driver.json'
+            state = initialized_state(home, command.options.get('state-dir'), admission)
             subscriptions = Subscriptions(state, {}, [], file)
             await output.json(await subscriptions.identity(identifier, expected))
             return 0
         fixed_wait(1)
         home = os.environ.get('HOME', ACTUAL_HOME)
-        file = Path(home) / '.arbol/arbol-claude-driver.json'
+        file = installation_root(home) / 'arbol-claude-driver.json'
         settings, notices = read_settings(file)
-        state = State(str(command.options.get('state-dir', str(Path(home) / 'Library/Application Support/Arbol/drivers/claude'))))
-        state.initialize(admission)
+        state = initialized_state(home, command.options.get('state-dir'), admission)
         identity = build_identity(payload=admission.payload)
         subscriptions = Subscriptions(state, settings, notices, file)
         authenticate = Authentication(subscriptions, dict(os.environ), cancel)
