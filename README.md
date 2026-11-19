@@ -40,7 +40,7 @@ arbol-claude-driver runs list
 arbol-claude-driver runs stop run-id
 ```
 
-Settings are read afresh from `~/.arbol/arbol-claude-driver.json`. State defaults to `~/Library/Application Support/Arbol/drivers/claude/`; `--state-dir` works before or after the command. Format-1 paths and records remain interoperable with previous TypeScript Builds, including account homes, Subscription locks, run owners, chat fingerprints and custom-state Keychain service names. Newer state formats are refused before mutation. `info` succeeds when Claude is missing or too old; commands needing it report `tool_missing` or `tool_unsupported`. The oldest supported Claude version is `2.1.289`.
+Settings are read afresh from `~/.arbol/arbol-claude-driver.json`. State defaults to `~/.arbol/drivers/claude/`; `--state-dir` works before or after the command. Format-1 paths and records remain interoperable with previous TypeScript Builds, including account homes, Subscription locks, run owners, chat fingerprints and custom-state Keychain service names. Newer state formats are refused before mutation. `info` succeeds when Claude is missing or too old; commands needing it report `tool_missing` or `tool_unsupported`. The oldest supported Claude version is `2.1.289`.
 
 `anthropic` is the implicit native selector and uses the owner's existing Claude login and home. Native `anthropic` sign-out/removal refuse rather than signing out other Claude sessions; sign out in Claude itself. Further Anthropic records retain their existing token-sign-in support/refusals (CLD-1.19 remains unsupported). Retired `zai`/`claude-zai`, gateway settings and import routes refuse before credential resolution. Identity does not invoke Claude, Keychain, a secret source or an application database. Existing account/native homes and credential references are preserved. Live qualification selects a real existing profile and never creates a profile/alias or copies authentication.
 
@@ -61,7 +61,7 @@ arbol-claude-driver info
 arbol-claude-driver -v 1 info
 ```
 
-The installed launcher selects the newest working Build. Numbered records and logs live under `~/Library/Application Support/Arbol/builds/arbol-claude-driver/`. The current Build descriptor keeps its complete existing unit/contract/live command strings; current tiers and real-profile selection are defined in [TESTS.md](TESTS.md). Earlier complete-suite and test-profile descriptions below are historical release context, not new identity qualification. `ARBOL_CONFORMANCE_REPO` selects another shared-suite checkout; The check finds the signed-in `test-anthropic` in its own test state directory, `~/Library/Application Support/Arbol/drivers/arbol-claude-driver/`, not in the default one; `ARBOL_BUILD_TEST_STATE_DIR` names another (DRV-D41). Missing login, exhausted usage or failed checks preserve the numbered record and previous working default. Account state and credentials are never packaged.
+The installed launcher selects the newest working Build compatible with layout 2. Numbered records and logs live under `~/.arbol/builds/arbol-claude-driver/`. The current Build descriptor keeps its complete existing unit/contract/live command strings; current tiers and real-profile selection are defined in [TESTS.md](TESTS.md). Earlier complete-suite and test-profile descriptions below are historical release context, not new identity qualification. `ARBOL_CONFORMANCE_REPO` selects another shared-suite checkout; The check finds the signed-in `test-anthropic` in its own test state directory, `~/Library/Application Support/Arbol/drivers/arbol-claude-driver/`, not in the default one; `ARBOL_BUILD_TEST_STATE_DIR` names another (DRV-D41). Missing login, exhausted usage or failed checks preserve the numbered record and previous working default. Account state and credentials are never packaged.
 
 `scripts/package_build.py --candidate /absolute/empty/folder` creates committed static source/runtime inputs for review. It emits M and `driver-payload-inputs.json`, with no unregistered D, acceptance or runnable qualified entry. Registered M/D packaging requires an actual Build; full gates and runner admission wiring belong to ABR-38. `scripts/verify_build.py --candidate <folder> --arbol-repo <arbol-repo> --output <evidence.json>` rehearses relocation, default/named launchers, failed-check retention and withdrawal with synthetic registry checks and zero vendor prompts. These checks supplement the production descriptor's actual gates.
 
@@ -109,3 +109,12 @@ Historical Build `1` passed 81 TypeScript tests, 38 shared scenarios and one Hai
 | Repository | Package | Version | Artifact corpus | Artifact repository |
 |---|---|---|---|---|
 | `workspace-ledger` | `workspace-ledger` (planned) | 1.0.0 | `~/Artifacts/sylvan-stack/repos/workspace-ledger` | `sylvan-stack/workspace-ledger-artifacts` |
+
+## Installation move and sign-in
+
+The normal Driver state uses the Keychain service
+`com.sylvan-stack.arbol.claude-driver`. The normal anthropic Subscription uses
+the external `~/.claude` home. The move carries each relocated `test-*` native
+home whole. For each relocated test Subscription, including `test-anthropic`
+where present, record the no-prompt probe result and re-sign in at the new
+path. The Installed Move runbook belongs to AFL-14 in the Arbol File Layout Saga.
