@@ -14,6 +14,7 @@ from test_runtime import (
     patch,
     read_json,
     time,
+    write_json,
 )
 
 
@@ -22,25 +23,27 @@ class StateTests(_support.StateTests):
         runs = Runs(self.state)
         stale: Record = {'runId': 'same', 'subscriptionId': 'anthropic', 'startedAt': now(1), 'owner': {'pid': 999999999, 'startedAt': now(1)}}
         newer = {**stale, 'startedAt': now(2), 'owner': {'pid': 999999998, 'startedAt': now(2)}}
-        runs.save(stale)
+        path = runs.path('same')
+        write_json(path, stale)
         temporary = self.state.directory / 'tmp/same'
         temporary.mkdir(parents=True)
         evidence = temporary / 'evidence'
         evidence.write_text('preserved')
         async def replace(*args: Any) -> list[int]:
-            runs.save(newer)
+            write_json(path, newer)
             return []
         with patch('arbol_claude_driver.continuity.end_run_groups', replace):
             await runs.recover(stale)
-        self.assertEqual(read_json(runs.path('same')), newer)
+        self.assertEqual(read_json(path), newer)
         self.assertTrue(evidence.exists())
-        runs.save(stale)
+        write_json(path, stale)
         async def replace_then_fail(*args: Any) -> list[int]:
-            runs.save(newer)
+            write_json(path, newer)
             raise Failure('internal', 'cleanup failed')
         with patch('arbol_claude_driver.continuity.end_run_groups', replace_then_fail), self.assertRaises(Failure):
             await runs.recover(stale)
-        self.assertEqual(read_json(runs.path('same')), newer)
+        self.assertEqual(read_json(path), newer)
+        self.assertTrue(evidence.exists())
 
 
 
