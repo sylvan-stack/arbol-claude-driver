@@ -18,6 +18,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .paths import installation_root
+
 from .identity_protocol import (
     BUILD, COMPONENTS, DESCRIPTOR, LIMIT, Authority, Object, Payload, canonical,
     canonical_uuid, decode, fields, identity_record, load_payload, physical, private_directory, process_identity,
@@ -136,7 +138,7 @@ def verify_acceptance(authority: Authority, payload: Payload, acceptance_digest:
             refuse()
     if acceptance['platform'] != {'system': 'Darwin', 'release': platform.release(), 'machine': platform.machine()} or platform.system() != 'Darwin':
         refuse()
-    installed = Path(pwd.getpwuid(os.getuid()).pw_dir) / 'Library/Application Support/Arbol/builds'
+    installed = installation_root(pwd.getpwuid(os.getuid()).pw_dir) / 'builds'
     if acceptance['status'] == 'candidate' and authority.registry == installed:
         refuse()
     gate_raw = read_bytes(authority.shared / 'gate.json')
