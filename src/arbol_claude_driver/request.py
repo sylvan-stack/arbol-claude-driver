@@ -62,6 +62,14 @@ async def read_request(command: Command, settings: Record, first_line: Callable[
             bad('arbolChat requires a lower-case chatSessionId UUID with hyphens.')
     if 'systemPrompt' in value and not isinstance(value['systemPrompt'], str):
         bad('Invalid systemPrompt.')
+    if 'cueContext' in value:
+        context = value['cueContext']
+        if value.get('arbolChat') is not True or not isinstance(context, str) or len(context) > 8000 or '\0' in context:
+            bad('cueContext requires an Arbol chat and a string of up to 8000 characters.')
+        try:
+            context.encode('utf-8')
+        except UnicodeError:
+            bad('cueContext must be valid UTF-8.')
     if 'serviceTier' in value:
         bad('Claude does not offer a service tier setting.')
     subscription = value.get('subscriptionId', settings.get('defaultSubscription', 'anthropic'))
@@ -137,4 +145,8 @@ def run_arguments(request: Record, conversation: str, control: bool, resume: boo
 
 def user_record(request: Record) -> Record:
     message = request['input']
-    return {'type': 'user', 'message': {'role': 'user', 'content': [{'type': 'text', 'text': message['text']}, *image_blocks(message.get('images'))]}}
+    content: list[Record] = [{'type': 'text', 'text': message['text']}]
+    if context := request.get('cueContext'):
+        content.append({'type': 'text', 'text': 'Cue Cards for this turn:\n\n' + context})
+    content.extend(image_blocks(message.get('images')))
+    return {'type': 'user', 'message': {'role': 'user', 'content': content}}

@@ -100,6 +100,8 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         child_env = await subscriptions.environment(initial['id'], env, key, lifetime=lifetime)
         if request.get('arbolChat') is True:
             child_env['ARBOL_CHAT'] = request['chatSessionId']
+            if 'cueContext' in request:
+                child_env['ARBOL_CUE_CARD_DELIVERY'] = 'steady'
         # In ~/.claude the tool reads the owner's MCP servers itself; only a test home needs them passed (CLD-3.20, CLD-D20).
         owner_args = owner_mcp_arguments(env.get('HOME', ACTUAL_HOME)) if request['tools'] == 'all' and is_test(initial['id']) else []
         broker = await Broker.start(subscriptions.state, initial['id'], record, 'run')
