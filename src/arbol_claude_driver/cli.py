@@ -12,6 +12,7 @@ from typing import Any
 from .continuity import Runs
 from .core import Failure, build_identity, fixed_wait, parse_arguments, read_settings, safe_failure
 from .dev import live_check, probe
+from .paths import installation_root, require_existing_state, state_directory
 from .processes import ACTUAL_HOME, inspect_tool
 from .protocol import Output, RunEvents
 from .runtime import run
@@ -59,10 +60,15 @@ async def main(args: list[str]) -> int:
             return await stand_in(Path(command.positionals[0]).absolute(), command.positionals[2:], reader)
         fixed_wait(1)
         home = os.environ.get('HOME', ACTUAL_HOME)
-        file = Path(home) / '.arbol/arbol-claude-driver.json'
+        file = installation_root(home) / 'arbol-claude-driver.json'
         settings, notices = read_settings(file)
-        state = State(str(command.options.get('state-dir', str(Path(home) / 'Library/Application Support/Arbol/drivers/claude'))))
-        state.initialize()
+        installed = state_directory(home).absolute()
+        state = State(str(command.options.get('state-dir', installed)))
+        if state.directory.resolve() == installed.resolve():
+            require_existing_state(home, installed)
+            state = State(installed)
+        else:
+            state.initialize()
         identity = build_identity()
         subscriptions = Subscriptions(state, settings, notices, file)
         authenticate = Authentication(subscriptions, dict(os.environ), cancel)

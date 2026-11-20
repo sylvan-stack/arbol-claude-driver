@@ -94,6 +94,7 @@ def package(candidate: str | None) -> Path:
     manifest = {
         "format": 1, "component": COMPONENT, "packageVersion": version, "entry": ENTRY,
         "build": number or "0", "candidate": number is None,
+        "installationLayout": json.loads((ROOT / "arbol-build.json").read_text())["installationLayout"],
         "source": source_provenance(),
         "python": {"version": pin["version"], "target": selected, "provider": pin["provider"],
                    "release": pin["release"], "archiveUrl": distribution["url"],

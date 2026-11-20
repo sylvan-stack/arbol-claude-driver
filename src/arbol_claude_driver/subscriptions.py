@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
+from .paths import state_directory
 from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
 from .state import State, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
 
@@ -180,7 +181,7 @@ def is_test(identifier: str) -> bool:
 
 def keychain_service(directory: Path, home: str = ACTUAL_HOME) -> str:
     path = str(directory.resolve())
-    normal = str((Path(home) / 'Library/Application Support/Arbol/drivers/claude').resolve())
+    normal = str(state_directory(home).resolve())
     service = 'com.sylvan-stack.arbol.claude-driver'
     return service if path == normal else service + '.' + hashlib.sha256(path.encode()).hexdigest()[:12]
 
