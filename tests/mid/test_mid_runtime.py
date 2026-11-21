@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import test_runtime as _support
-from test_runtime import (Authentication ,Chats ,Failure ,MessageDigest ,Path ,ROOT ,Runs ,Secrets ,Subscriptions ,asyncio ,child_command ,compact ,digest ,kill_group ,loads ,now ,os ,python_launcher ,read_json ,run_failure ,shlex ,signal ,stat ,subprocess ,sys ,tempfile ,time ,write_json)
+from test_runtime import (
+    Chats, Failure, MessageDigest, Path, ROOT, Runs, asyncio, child_command, compact, digest,
+    kill_group, loads, now, os, python_launcher, read_json, run_failure, signal, stat,
+    subprocess, sys, tempfile, time, write_json,
+)
 
 
 class CompatibilityTests(_support.CompatibilityTests):
@@ -65,23 +69,6 @@ class StateTests(_support.StateTests):
         self.assertEqual(before, {str(path.relative_to(self.state.directory)): path.read_bytes() for path in self.state.directory.rglob('*') if path.is_file()})
 # TEST-TIER-END tests/test_runtime.py::StateTests.test_private_atomic_state_and_newer_format_is_untouched
 
-
-# TEST-TIER-BEGIN tests/test_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state
-    async def test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state(self) -> None:
-        settings_file = self.root / '.arbol/settings.json'
-        subscriptions = Subscriptions(self.state, {}, [], settings_file)
-        auth = Authentication(subscriptions, {'HOME': str(self.root)}, asyncio.Event())
-        created = await subscriptions.create('anthropic', 'Account', 'named')
-        await auth.save('named', lambda value: {**value, 'state': 'signed_in', 'checkedAt': now(10)})
-        initial = await subscriptions.get('named')
-        await auth.save('named', lambda value: {**auth.unsigned(value), 'label': 'Latest'})
-        await subscriptions.run_report(initial, dict(Failure('credential_rejected', 'late response').result), {'outcome': 'ok', 'fetchedAt': now(), 'windows': []})
-        latest = await subscriptions.get('named')
-        self.assertEqual(latest['state'], 'signed_out')
-        self.assertEqual(latest['label'], 'Latest')
-        self.assertNotIn('lastUsage', latest)
-        self.assertEqual(created['id'], 'named')
-# TEST-TIER-END tests/test_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state
 
 # TEST-TIER-BEGIN tests/test_runtime.py::StateTests.test_legacy_split_surrogate_map_rebuilds_safely
     async def test_legacy_split_surrogate_map_rebuilds_safely(self) -> None:
@@ -148,26 +135,6 @@ class TransportTests(_support.TransportTests):
 # TEST-TIER-END tests/test_runtime.py::TransportTests.test_detached_pipe_holder_cannot_keep_command_alive
 
 
-# TEST-TIER-BEGIN tests/test_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline
-    async def test_secret_command_fresh_environment_and_single_newline(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
-            folder = Path(name)
-            counter = folder / 'counter'
-            script = folder / 'source'
-            python_launcher(script, f'import pathlib,os\np=pathlib.Path({str(counter)!r});n=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(n));print(str(n)+"key");assert "ANTHROPIC_AUTH_TOKEN" not in os.environ\n')
-            secrets = Secrets('service', name, {'HOME': name, 'PATH': '/bin', 'ANTHROPIC_AUTH_TOKEN': 'must-not-leak'})
-            source = {'from': 'command', 'command': [str(script)]}
-            self.assertEqual(await secrets.read('account', source), '1key')
-            self.assertEqual(await secrets.read('account', source), '2key')
-            script.write_text('#!/bin/sh\nprintf "key\\n\\n"\n')
-            self.assertEqual(await secrets.read('account', source), 'key\n')
-            script.write_text('#!/bin/sh\nprintf "private-secret"\nexit 1\n')
-            with self.assertRaises(Failure) as caught:
-                await secrets.read('account', source)
-            self.assertNotIn('private-secret', compact(caught.exception.result))
-# TEST-TIER-END tests/test_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline
-
-
 class ProtocolTests(_support.ProtocolTests):
 # TEST-TIER-BEGIN tests/test_runtime.py::ProtocolTests.test_questions_validate_answers_duplicate_ack_and_withdrawal
     async def test_questions_validate_answers_duplicate_ack_and_withdrawal(self) -> None:
@@ -201,39 +168,6 @@ class ProtocolTests(_support.ProtocolTests):
         self.assertEqual([record['seq'] for record in self.output.records], [1, 2])
 # TEST-TIER-END tests/test_runtime.py::ProtocolTests.test_error_fields_override_wording_and_usage_never_double_counts
 
-
-class CliLifecycleTests(_support.CliLifecycleTests):
-# TEST-TIER-BEGIN tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status
-    async def test_replacing_signin_preserves_failure_exit_status(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
-            home = Path(name)
-            (home / '.arbol').mkdir()
-            tool = home / 'tool'
-            tool.mkdir()
-            vendor = tool / 'vendor-tool'
-            vendor.write_text('#!/bin/sh\nexec ' + shlex.join([str(ROOT / 'bin/arbol-claude-driver'), 'dev', 'stand-in', str(tool), '--']) + ' "$@"\n')
-            vendor.chmod(0o700)
-            (home / '.arbol/arbol-claude-driver.json').write_text(compact({'toolPath': str(vendor)}))
-            (tool / 'scenario').write_text('C2 waiting\n')
-            env = {**os.environ, 'HOME': name, 'ARBOL_TEST_TIME_SCALE': '10'}
-            args = [str(ROOT / 'bin/arbol-claude-driver'), 'subscriptions', 'sign-in', 'anthropic']
-            first = await asyncio.create_subprocess_exec(*args, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-            try:
-                assert first.stdout
-                opened = loads(await asyncio.wait_for(first.stdout.readline(), 3))
-                self.assertEqual(opened['step'], 'open_url')
-                (tool / 'scenario').write_text('C2 success\n')
-                second = await asyncio.create_subprocess_exec(*args, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                second_out, _ = await asyncio.wait_for(second.communicate(), 4)
-                self.assertEqual(second.returncode, 0, second_out)
-                first_out, _ = await asyncio.wait_for(first.communicate(), 4)
-                self.assertEqual(first.returncode, 1, first_out)
-                self.assertEqual(loads(first_out)['error']['code'], 'in_use')
-            finally:
-                if first.returncode is None:
-                    first.kill()
-                    await first.wait()
-# TEST-TIER-END tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status
 
 # LOW TIER — DO NOT ENABLE OR RECREATE
 # Historical examples only. Read before adding related tests; never execute.
@@ -597,3 +531,76 @@ class CliLifecycleTests(_support.CliLifecycleTests):
 #         self.assertEqual(self.output.records[-1]['usage'], {'inputTokens': 2})
 # LOW-TIER-SOURCE-END
 # LOW-TIER-END
+
+
+# SUPERSEDED BY OG-5 — Historical bodies. These routes used retired credential handling or fabricated login state.
+# SUPERSEDED: tests/test_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state
+# # TEST-TIER-BEGIN tests/test_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state
+#     async def test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state(self) -> None:
+#         settings_file = self.root / '.arbol/settings.json'
+#         subscriptions = Subscriptions(self.state, {}, [], settings_file)
+#         auth = Authentication(subscriptions, {'HOME': str(self.root)}, asyncio.Event())
+#         created = await subscriptions.create('anthropic', 'Account', 'named')
+#         await auth.save('named', lambda value: {**value, 'state': 'signed_in', 'checkedAt': now(10)})
+#         initial = await subscriptions.get('named')
+#         await auth.save('named', lambda value: {**auth.unsigned(value), 'label': 'Latest'})
+#         await subscriptions.run_report(initial, dict(Failure('credential_rejected', 'late response').result), {'outcome': 'ok', 'fetchedAt': now(), 'windows': []})
+#         latest = await subscriptions.get('named')
+#         self.assertEqual(latest['state'], 'signed_out')
+#         self.assertEqual(latest['label'], 'Latest')
+#         self.assertNotIn('lastUsage', latest)
+#         self.assertEqual(created['id'], 'named')
+# # TEST-TIER-END tests/test_runtime.py::StateTests.test_subscriptions_late_check_and_usage_cannot_overwrite_newer_state
+#
+# SUPERSEDED: tests/test_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline
+# # TEST-TIER-BEGIN tests/test_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline
+#     async def test_secret_command_fresh_environment_and_single_newline(self) -> None:
+#         with tempfile.TemporaryDirectory() as name:
+#             folder = Path(name)
+#             counter = folder / 'counter'
+#             script = folder / 'source'
+#             python_launcher(script, f'import pathlib,os\np=pathlib.Path({str(counter)!r});n=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(n));print(str(n)+"key");assert "ANTHROPIC_AUTH_TOKEN" not in os.environ\n')
+#             secrets = Secrets('service', name, {'HOME': name, 'PATH': '/bin', 'ANTHROPIC_AUTH_TOKEN': 'must-not-leak'})
+#             source = {'from': 'command', 'command': [str(script)]}
+#             self.assertEqual(await secrets.read('account', source), '1key')
+#             self.assertEqual(await secrets.read('account', source), '2key')
+#             script.write_text('#!/bin/sh\nprintf "key\\n\\n"\n')
+#             self.assertEqual(await secrets.read('account', source), 'key\n')
+#             script.write_text('#!/bin/sh\nprintf "private-secret"\nexit 1\n')
+#             with self.assertRaises(Failure) as caught:
+#                 await secrets.read('account', source)
+#             self.assertNotIn('private-secret', compact(caught.exception.result))
+# # TEST-TIER-END tests/test_runtime.py::TransportTests.test_secret_command_fresh_environment_and_single_newline
+#
+# SUPERSEDED: tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status
+# # TEST-TIER-BEGIN tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status
+#     async def test_replacing_signin_preserves_failure_exit_status(self) -> None:
+#         with tempfile.TemporaryDirectory() as name:
+#             home = Path(name)
+#             (home / '.arbol').mkdir()
+#             tool = home / 'tool'
+#             tool.mkdir()
+#             vendor = tool / 'vendor-tool'
+#             vendor.write_text('#!/bin/sh\nexec ' + shlex.join([str(ROOT / 'bin/arbol-claude-driver'), 'dev', 'stand-in', str(tool), '--']) + ' "$@"\n')
+#             vendor.chmod(0o700)
+#             (home / '.arbol/arbol-claude-driver.json').write_text(compact({'toolPath': str(vendor)}))
+#             (tool / 'scenario').write_text('C2 waiting\n')
+#             env = {**os.environ, 'HOME': name, 'ARBOL_TEST_TIME_SCALE': '10'}
+#             args = [str(ROOT / 'bin/arbol-claude-driver'), 'subscriptions', 'sign-in', 'anthropic']
+#             first = await asyncio.create_subprocess_exec(*args, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+#             try:
+#                 assert first.stdout
+#                 opened = loads(await asyncio.wait_for(first.stdout.readline(), 3))
+#                 self.assertEqual(opened['step'], 'open_url')
+#                 (tool / 'scenario').write_text('C2 success\n')
+#                 second = await asyncio.create_subprocess_exec(*args, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+#                 second_out, _ = await asyncio.wait_for(second.communicate(), 4)
+#                 self.assertEqual(second.returncode, 0, second_out)
+#                 first_out, _ = await asyncio.wait_for(first.communicate(), 4)
+#                 self.assertEqual(first.returncode, 1, first_out)
+#                 self.assertEqual(loads(first_out)['error']['code'], 'in_use')
+#             finally:
+#                 if first.returncode is None:
+#                     first.kill()
+#                     await first.wait()
+# # TEST-TIER-END tests/test_runtime.py::CliLifecycleTests.test_replacing_signin_preserves_failure_exit_status

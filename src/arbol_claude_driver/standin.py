@@ -16,7 +16,6 @@ from typing import Any
 
 from .core import Failure, Record, compact, now, loads
 from .history import encode_folder
-from .processes import child_command
 
 FIXTURES = Path(__file__).resolve().parents[2] / 'test'
 RUN_SCENARIOS = {'C44', 'C4', 'C5', 'C7', 'C8', 'C26', 'C27', 'C28', 'C29', 'C30', 'C9', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20', 'C25', 'C32', 'C33', 'C35', 'C36', 'C37', 'C38', 'C40', 'C42', 'C43'}
@@ -458,10 +457,11 @@ async def stand_in(folder: Path, args: list[str], input_reader: asyncio.StreamRe
         raise Failure('invalid_input', 'This stand-in does not implement that scenario.')
     script = StandIn(folder, args, scenario, part)
     version = '2.1.288' if scenario == 'C31' and part == 'old' else None if scenario == 'C31' and part == 'missing' else '2.1.289'
-    home = os.environ.get('CLAUDE_CONFIG_DIR')
-    credential = Path(home) / 'stand-in-login.json' if home else None
-    logged = credential is not None and credential.is_file()
-    checks = {'home': home, 'privateHome': os.getcwd() == home, 'source': script.subscription['source'], 'synthetic': 'Successful login, rejection and unavailable variants of the recorded protocol', 'injectedVariablesAbsent': not any(key in os.environ for key in ['ANTHROPIC_API_KEY', 'CLAUDECODE', 'CLAUDE_SESSION_ID', 'OPENAI_API_KEY', 'CODEX_HOME', 'NODE_OPTIONS']), 'hasCredential': logged} if subscription_scenario else {}
+    checks = {'source': script.subscription['source'],
+              'injectedVariablesAbsent': not any(key in os.environ for key in [
+                  'ANTHROPIC_API_KEY', 'CLAUDECODE', 'CLAUDE_SESSION_ID',
+                  'OPENAI_API_KEY', 'CODEX_HOME', 'NODE_OPTIONS',
+              ])} if subscription_scenario else {}
     record = {'scenario': scenario, 'part': part, 'arguments': args, 'environment': sorted(os.environ), 'workingDirectory': os.getcwd(), 'toolVersion': version, 'checks': {**checks, **arbol_identity()}}
     with (folder / 'received.jsonl').open('a') as handle:
         handle.write(compact(record) + '\n')
@@ -473,32 +473,6 @@ async def stand_in(folder: Path, args: list[str], input_reader: asyncio.StreamRe
     if '--arbol-unknown-option' in args and scenario == 'C32':
         sys.stderr.write('error: unknown option --arbol-unknown-option\n')
         return 1
-    if credential is not None:
-        if args == ['auth', 'status', '--json']:
-            accepted = logged and part != 'rejected'
-            script.output({**script.subscription['status'], 'configDirectory': home, 'projectsDirectory': str(Path(home or '.') / 'projects'), 'loggedIn': accepted, 'authMethod': 'claude.ai' if accepted else 'none', **({'email': 'fixture@example.invalid', 'orgName': 'Fixture organization', 'subscriptionType': 'fixture'} if accepted else {})})
-            return 0 if accepted else 1
-        if args == ['auth', 'logout']:
-            credential.unlink(missing_ok=True)
-            return 0
-        if args == ['auth', 'login', '--claudeai']:
-            url = 'https://claude.com/cai/oauth/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A12345%2Fcallback&state=fixture'
-            code = 'https://claude.com/cai/oauth/authorize?redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&state=fixture'
-            sys.stdout.write(f"Opening browser to sign in…\nIf the browser didn't open, visit: {code}\nPaste code here if prompted > ")
-            sys.stdout.flush()
-            if not os.environ.get('BROWSER'):
-                return 1
-            await child_command(os.environ['BROWSER'], [url], dict(os.environ), home or '.')
-            if part == 'waiting':
-                await asyncio.Event().wait()
-            if part == 'by-code' and (await input_reader.readline()).decode().strip() != 'fixture-code':
-                return 1
-            if part == 'failed':
-                return 1
-            credential.write_text('{"credential":"fixture-vendor-secret"}')
-            credential.chmod(0o600)
-            sys.stdout.write('Login successful.\n')
-            return 0
     if '--input-format' in args:
         if part == 'unavailable':
             return 1

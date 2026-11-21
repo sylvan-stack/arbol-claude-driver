@@ -353,7 +353,7 @@ class ClaudeLocalSubject:
             config = self._child(home, ".claude")
             settings = self._child(home, ".arbol")
             vendor = self._child(self.fixture.root, "vendor", fresh=False)
-            config.exclusive(".credentials.json", canonical({"fixtureValue": self.secret}))
+            config.exclusive("preserve.txt", (self.secret + "\n").encode())
             vendor.exclusive("claude", b'#!/bin/sh\nprintf "called\\n" > "${0%/*}/called"\nexit 97\n')
             descriptor = os.open("claude", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=vendor.descriptor)
             try:
@@ -362,7 +362,7 @@ class ClaudeLocalSubject:
                 os.close(descriptor)
             settings.exclusive("arbol-claude-driver.json", b"{unusable settings\n" if guarded_settings else
                                canonical({"toolPath": str(vendor.path / "claude")}))
-            self.environment = {"HOME": str(home.path), "CLAUDE_CONFIG_DIR": str(config.path),
+            self.environment = {"HOME": str(home.path),
                                 "PATH": str(vendor.path) + ":/usr/bin:/bin", "LC_ALL": "C", "TZ": "UTC"}
             self.observed_inputs = self.image(home.path)
             self.vendor_marker = vendor.path / "called"

@@ -27,7 +27,7 @@ from arbol_claude_driver.processes import child_command, kill_group, python_laun
 from arbol_claude_driver.protocol import Output, RunEvents, RunProtocol, limit_report, run_failure, truncate_result  # noqa: E402, F401
 from arbol_claude_driver.request import read_request, run_arguments  # noqa: E402, F401
 from arbol_claude_driver.state import State, owner_alive, parse_owner, process_owner, read_json, write_json  # noqa: E402, F401
-from arbol_claude_driver.subscriptions import Authentication, Secrets, Subscriptions, family_settings, keychain_service, normalize_quota, validate_key  # noqa: E402, F401
+from arbol_claude_driver.subscriptions import Authentication, Subscriptions, family_settings  # noqa: E402, F401
 
 from arbol_claude_driver.models import ValidatedRequest  # noqa: E402
 
@@ -43,7 +43,6 @@ __all__ = [
     'ROOT',
     'Record',
     'Runs',
-    'Secrets',
     'Subscriptions',
     'asyncio',
     'child_command',
