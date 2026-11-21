@@ -116,7 +116,7 @@ class Broker:
             raise Failure('internal', 'Unknown metadata notification kind.')
         # This generated client imports stdlib only, writes no Driver file and
         # knows only the notification endpoint. It has no registry authority.
-        return f'''import json,os,socket,struct,subprocess
+        return f'''import json,os,socket,struct,subprocess,sys
 value={{"kind":{kind!r},"nonce":{self.nonce!r}}}
 value["pid"]=os.getpid()
 value["stamp"]=" ".join(subprocess.check_output(["/bin/ps","-p",str(os.getpid()),"-o","lstart="],env={{"PATH":"/usr/bin:/bin","LC_ALL":"C","TZ":"UTC"}},timeout=5).decode("ascii").split())

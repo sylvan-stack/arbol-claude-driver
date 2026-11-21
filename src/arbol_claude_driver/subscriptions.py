@@ -351,7 +351,7 @@ class Authentication:
     async def status(self, identifier: str, lifetime: Record | None = None, *, program: str | None = None) -> Record:
         env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
         result = await child_command(program or await self.tool(), ['auth', 'status', '--json'], env,
-                                     str(self.subscriptions.folder()), 20, self.cancel)
+                                     ACTUAL_HOME, 20, self.cancel)
         try:
             value = loads(result['stdout'])
         except ValueError:
