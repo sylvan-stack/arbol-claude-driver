@@ -163,12 +163,10 @@ def fixed_wait(milliseconds: float, env: Env | None = None) -> float:
     return milliseconds / scale / 1000
 
 
-def clean_environment(source: Env, home: str, config_home: str | None = None) -> Env:
+def clean_environment(source: Env, home: str) -> Env:
     inherited = 'PATH USER LOGNAME LANG LC_ALL LC_CTYPE LC_MESSAGES TMPDIR TMP TEMP HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS'.split()
     env = {key: source[key] for key in inherited if key in source}
     env['HOME'] = home
-    if config_home is not None:
-        env['CLAUDE_CONFIG_DIR'] = config_home
     return env
 
 

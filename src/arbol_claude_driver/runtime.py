@@ -14,25 +14,26 @@ from .continuity import Chats, Runs
 from .core import Command, Env, Failure, Record, compact, fixed_wait, redact, safe_text, loads
 from .metadata import Broker
 from .history import MessageDigest, text_history
-from .processes import ACTUAL_HOME, close_pipes, end_run_groups, inspect_tool, kill_group, owner_mcp_arguments, require_tool, run_launchers, spawn, wait_exit
+from .processes import close_pipes, end_run_groups, inspect_tool, kill_group, require_tool, run_launchers, spawn, wait_exit
 from .protocol import RunEvents, RunProtocol, exit_failure
 from .request import read_request, run_arguments, user_record
 from .state import atomic_write, private_directory, process_owner
-from .subscriptions import Subscriptions, is_test
+from .subscriptions import Authentication, Subscriptions, native_sign_in_required
 
 
 async def run(command: Command, subscriptions: Subscriptions, events: RunEvents, env: Env, build: str, cancel: asyncio.Event, input_reader: asyncio.StreamReader) -> int:
     def identity(identifier: str, labels: Record | None) -> None:
         events.run_id, events.labels = identifier, labels
     request = (await read_request(command, subscriptions.settings, input_reader.readline, identity)).record()
+    subscriptions.require_native_route(request['subscriptionId'])
     initial, lifetime = await subscriptions.snapshot(request['subscriptionId'])
     if initial['state'] != 'signed_in':
-        raise Failure('not_signed_in', 'Sign in to this Subscription first.', {'remedy': 'Sign in.'})
+        raise native_sign_in_required()
     tool = await inspect_tool(subscriptions.state.directory, subscriptions.settings.get('toolPath'), env, cancel)
     program = require_tool(tool)
-    key = None
+    await Authentication(subscriptions, env, cancel).require_native_login(initial['id'], lifetime, program=program)
     runs, chats = Runs(subscriptions.state), Chats(subscriptions.state)
-    home = subscriptions.folder(initial['id'])
+    home = subscriptions.folder()
     plan, record = await chats.reserve(request, runs, home, lifetime=lifetime)
     fingerprint = MessageDigest()
     for item in request['history']:
@@ -102,13 +103,11 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         if request.get('workingDirectory') is None:
             private_directory(Path(cwd))
         # The subscription's clean environment excludes inherited Arbol identity.
-        child_env = await subscriptions.environment(initial['id'], env, key, lifetime=lifetime)
+        child_env = await subscriptions.environment(initial['id'], env, lifetime=lifetime)
         if request.get('arbolChat') is True:
             child_env['ARBOL_CHAT'] = request['chatSessionId']
             if 'cueContext' in request:
                 child_env['ARBOL_DISABLED_HOOK_FEATURES'] = 'cue-card-injection'
-        # In ~/.claude the tool reads the owner's MCP servers itself; only a test home needs them passed (CLD-3.20, CLD-D20).
-        owner_args = owner_mcp_arguments(env.get('HOME', ACTUAL_HOME)) if request['tools'] == 'all' and is_test(initial['id']) else []
         broker = await Broker.start(subscriptions.state, initial['id'], record, 'run')
         launcher, shell = run_launchers(temp, env, broker)
         child_env.update(CLAUDE_CODE_SHELL=str(shell), CLAUDE_CODE_DISABLE_AUTO_MEMORY='1', BASH_DEFAULT_TIMEOUT_MS='300000', BASH_MAX_TIMEOUT_MS='1800000', CLAUDE_CODE_MAX_RETRIES='3')
@@ -120,7 +119,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
                 request, plan['conversation'], command.options.get('control') is True, plan['resume'],
                 system_prompt_path=system_prompt_path,
             )
-            child = await spawn(str(launcher), [program, *arguments, *owner_args], child_env, cwd)
+            child = await spawn(str(launcher), [program, *arguments], child_env, cwd)
             assert child.stdin and child.stdout and child.stderr
             stderr = ''
             stop_deadline = None

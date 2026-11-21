@@ -22,12 +22,19 @@ from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed
 from .metadata import Broker
 from .identity import canonical_id, private_file, unsafe
 from .identity_protocol import sync_directory, token, valid_token
-from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, owner_skills, python_launcher, require_tool, spawn
+from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, python_launcher, require_tool, spawn
 from .state import State, durable_delete, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
 
 FAMILIES: list[Record] = [
     {'id': 'anthropic', 'label': 'Anthropic', 'auth': 'vendor_login', 'settings': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
 ]
+
+
+def native_sign_in_required() -> Failure:
+    return Failure(
+        'not_signed_in', 'Claude Code reports no active account.',
+        {'remedy': 'Sign in directly in Claude Code, then refresh the Subscription.'},
+    )
 
 
 def family_id(value: Any) -> str:
@@ -178,9 +185,6 @@ class Subscriptions:
                 folder = self.state.subscription(identifier)
                 if identifier != 'anthropic' and read_json(folder / 'record.json') is None and read_json(folder / 'sign-in.json') is None:
                     timestamp = now()
-                    if is_test(identifier):
-                        private_directory(folder / 'home')
-                        owner_skills(folder / 'home', str(self.settings_file.parent.parent))
                     identity = self.state.identity
                     witness = token() if identity is not None and identity.format == 2 else None
                     if witness is not None and identity is not None:
@@ -201,40 +205,26 @@ class Subscriptions:
                 raise Failure('invalid_input', 'Give the Subscription a non-empty label.')
             async with self.mutation(identifier):
                 record = await self.record(identifier)
-                if is_test(identifier):
-                    home = self.folder(identifier)
-                    private_directory(home)
-                    owner_skills(home, str(self.settings_file.parent.parent))
                 write_json(self.state.subscription(identifier) / 'record.json', {**record, 'label': label, 'updatedAt': now()})
         return await self.get(identifier)
 
-    async def require_signed_in(self, identifier: str) -> Record:
-        subscription = await self.get(identifier)
-        if subscription['state'] != 'signed_in':
-            raise Failure('not_signed_in', 'Sign in to this Subscription first.', {'remedy': 'Sign in.'})
-        return subscription
+    @staticmethod
+    def require_native_route(identifier: str) -> None:
+        if identifier in {'zai', 'claude-zai'}:
+            raise retired_route()
+        if identifier != 'anthropic':
+            raise Failure('unsupported', 'This Subscription cannot select a native Claude Code account.',
+                          {'remedy': 'Use the anthropic Subscription with your existing Claude Code sign-in.'})
 
-    def folder(self, identifier: str) -> Path:
-        """The tool's home for this Subscription's children: the owner's `~/.claude`, or a test Subscription's own (CLD-1.2, CLD-D20)."""
-        if is_test(identifier):
-            return self.state.subscription(identifier) / 'home'
+    @staticmethod
+    def folder() -> Path:
         return Path(ACTUAL_HOME) / '.claude'
 
-    async def environment(self, identifier: str, inherited: Env, key: str | None = None, *, lifetime: Record | None = None) -> Env:
+    async def environment(self, identifier: str, inherited: Env, *, lifetime: Record | None = None) -> Env:
+        self.require_native_route(identifier)
         await self.get(identifier)
-        if is_test(identifier):
-            home = self.folder(identifier)
-            async with self.mutation(identifier):
-                await self.record(identifier)
-                if lifetime is not None and not self.matches(identifier, lifetime):
-                    raise Failure('in_use', 'The Subscription lifetime changed before environment preparation.')
-                private_directory(home)
-                owner_skills(home, inherited.get('HOME', ACTUAL_HOME))
-            return clean_environment(inherited, ACTUAL_HOME, str(home))
-        if identifier != 'anthropic':
-            # Its token sign-in (CLD-1.19) is not built; in ~/.claude it would run on the owner's own login.
-            raise Failure('unsupported', 'A further Anthropic Subscription needs its own token sign-in, which this Driver does not have yet (CLD-1.19).')
-        # No CLAUDE_CONFIG_DIR: the tool uses ~/.claude and the owner's own sign-in, as when started by hand (DRV-D42).
+        if lifetime is not None and not self.matches(identifier, lifetime):
+            raise Failure('in_use', 'The Subscription lifetime changed before environment preparation.')
         return clean_environment(inherited, ACTUAL_HOME)
 
     async def run_report(self, initial: Record, failure: Record | None = None, usage: Record | None = None, *, lifetime: Record | None = None) -> None:
@@ -545,9 +535,10 @@ class Authentication:
         validate_key(key)
         return key
 
-    async def status(self, identifier: str, lifetime: Record | None = None) -> Record:
+    async def status(self, identifier: str, lifetime: Record | None = None, *, program: str | None = None) -> Record:
         env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
-        result = await child_command(await self.tool(), ['auth', 'status', '--json'], env, str(self.subscriptions.folder(identifier)), 20, self.cancel)
+        result = await child_command(program or await self.tool(), ['auth', 'status', '--json'], env,
+                                     str(self.subscriptions.folder()), 20, self.cancel)
         try:
             value = loads(result['stdout'])
         except ValueError:
@@ -556,6 +547,10 @@ class Authentication:
             raise Failure('tool_failed', 'claude could not report its account status.')
         account = {target: value[source] for target, source in [('name', 'name'), ('email', 'email'), ('organization', 'orgName'), ('plan', 'subscriptionType')] if isinstance(value.get(source), str)}
         return {'accepted': value['loggedIn'], **({'account': account} if account else {})}
+
+    async def require_native_login(self, identifier: str, lifetime: Record | None, *, program: str | None = None) -> None:
+        if not (await self.status(identifier, lifetime, program=program))['accepted']:
+            raise native_sign_in_required()
 
     async def rejection(self, initial: Record, failure: Failure, lifetime: Record | None = None) -> None:
         await self.save(initial['id'], lambda record: {**record, 'state': 'needs_attention', 'problem': failure.result, 'checkedAt': now()}, initial['updatedAt'], lifetime=lifetime)
@@ -579,18 +574,24 @@ class Authentication:
         return await self.subscriptions.get(identifier)
 
     async def usage(self, identifier: str) -> Record:
+        self.subscriptions.require_native_route(identifier)
         initial = await self.subscriptions.get(identifier)
         if initial['state'] != 'signed_in':
             return {'outcome': 'needs_sign_in', 'message': 'Sign in to this Subscription first.', 'fetchedAt': now(), 'windows': []}
         return dict(initial.get('lastUsage', {'outcome': 'unsupported', 'message': 'Usage is available after a run reports it.', 'fetchedAt': now(), 'windows': []}))
 
     async def models(self, identifier: str) -> Record:
-        await self.subscriptions.require_signed_in(identifier)
+        self.subscriptions.require_native_route(identifier)
+        initial, lifetime = await self.subscriptions.snapshot(identifier)
+        if initial['state'] != 'signed_in':
+            raise native_sign_in_required()
+        program = await self.tool()
+        await self.require_native_login(identifier, lifetime, program=program)
         fetched = now()
         child = None
         try:
-            env = await self.subscriptions.environment(identifier, self.env)
-            child = await spawn(await self.tool(), ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions'], {**env, 'CLAUDE_CODE_DISABLE_AUTO_MEMORY': '1'}, str(self.subscriptions.folder(identifier)))
+            env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
+            child = await spawn(program, ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions'], {**env, 'CLAUDE_CODE_DISABLE_AUTO_MEMORY': '1'}, str(self.subscriptions.folder()))
             assert child.stdin and child.stdout and child.stderr
             drain = asyncio.create_task(child.stderr.read())
             child.stdin.write((compact({'type': 'control_request', 'request_id': 'catalog', 'request': {'subtype': 'initialize'}}) + '\n').encode())
@@ -662,7 +663,7 @@ class Authentication:
                 broker = await Broker.start(self.subscriptions.state, identifier, progress, 'login')
                 python_launcher(browser, broker.notification_code('address'))
                 env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
-                child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, str(self.subscriptions.folder(identifier)))
+                child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, str(self.subscriptions.folder()))
                 assert child.stdout and child.stderr and child.stdin
                 tool = await process_owner(child.pid)
                 async with self.subscriptions.state.lock(identifier, allow_pending=True):
@@ -752,7 +753,7 @@ class Authentication:
                     cleanup = await inspect_tool(self.subscriptions.state.directory, self.subscriptions.settings.get('toolPath'), self.env, asyncio.Event())
                     if cleanup.get('path') and cleanup['supported']:
                         try:
-                            await child_command(cleanup['path'], ['auth', 'logout'], env, str(self.subscriptions.folder(identifier)))
+                            await child_command(cleanup['path'], ['auth', 'logout'], env, str(self.subscriptions.folder()))
                         except Failure:
                             pass
             await self.release(identifier, progress)
@@ -775,7 +776,7 @@ class Authentication:
             await self.save(identifier, self.unsigned, owner=progress)
             if initial['family'] == 'anthropic' and initial['state'] != 'signed_out':
                 env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
-                result = await child_command(await self.tool(), ['auth', 'logout'], env, str(self.subscriptions.folder(identifier)), cancel=self.cancel)
+                result = await child_command(await self.tool(), ['auth', 'logout'], env, str(self.subscriptions.folder()), cancel=self.cancel)
                 if result['code'] != 0:
                     raise Failure('tool_failed', 'claude could not sign the account out.')
             if remove:

@@ -157,7 +157,7 @@ async def inspect_tool(state_directory: Path, program: str | None, env: Env, can
         with tempfile.TemporaryDirectory(prefix='version-', dir=root) as directory:
             home = str(directory)
             try:
-                result = await child_command(path, ['--version'], clean_environment(env, home, str(Path(home) / '.claude')), home, 10, cancel)
+                result = await child_command(path, ['--version'], clean_environment(env, home), home, 10, cancel)
             except Failure:
                 raise Failure('tool_failed', f'claude could not report its version at {path}.', {'detail': {'basis': 'fields', 'neededVersion': OLDEST_SUPPORTED}}) from None
             match = re.fullmatch(r'\s*(\d+\.\d+\.\d+)\s+\(Claude Code\)\s*', result['stdout'])
@@ -254,35 +254,3 @@ async def end_groups(owners: list[Record], deadline: float | None = None) -> lis
 
 async def end_run_groups(folder: Path, tool: Record | None = None, deadline: float | None = None) -> list[int]:
     return await end_groups([*noted_owners(folder / 'shell-calls'), *noted_owners(folder / 'tool-owner'), *([tool] if tool else [])], deadline)
-
-
-def owner_skills(home: Path, owner_home: str) -> None:
-    source = Path(owner_home) / '.claude' / 'skills'
-    directory = home / 'skills'
-    if directory.is_symlink():
-        directory.unlink()
-    elif directory.exists() and not directory.is_dir():
-        raise Failure('internal', 'The Subscription skills entry is not a directory.')
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    desired = {entry.name for entry in source.iterdir() if entry.name != 'synced' and entry.is_dir()} if source.is_dir() else set()
-    for entry in directory.iterdir():
-        if entry.name != 'synced' and entry.is_symlink() and entry.name not in desired:
-            entry.unlink()
-    for name in desired:
-        link = directory / name
-        target = source / name
-        if link.exists() and not link.is_symlink():
-            raise Failure('internal', 'An owner skill conflicts with a private skill entry.')
-        if link.is_symlink() and os.readlink(link) == str(target):
-            continue
-        temporary = directory / f'.arbol-skill-{os.urandom(12).hex()}'
-        try:
-            temporary.symlink_to(target)
-            os.replace(temporary, link)
-        finally:
-            temporary.unlink(missing_ok=True)
-
-
-def owner_mcp_arguments(owner_home: str) -> list[str]:
-    path = Path(owner_home) / '.claude.json'
-    return ['--mcp-config', str(path)] if path.is_file() else []
