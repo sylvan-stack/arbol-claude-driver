@@ -8,7 +8,7 @@ Reviewed revision: `333e67a57990610b8a97afe433d7bc61273ebc7a` under SYL-327 (29 
 
 ## Selection and limits
 
-2 top-tier inventory entries and 21 mid-tier entries are available after the higher-bar review. 23 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Top-tier bodies are unchanged. Retained mid-tier sources remain uncommented.
+The inventory lists two top-tier entries and 18 available mid-tier entries. Three obsolete authentication cases are preserved as comments under ABR-62. 23 low-tier entries were removed under SYL-327. Definitions, scenarios, programs and entry points overlap; this is not a runtime suite count. Top-tier bodies are unchanged. Retained mid-tier sources remain uncommented.
 
 ## Active top tier
 
@@ -63,8 +63,8 @@ archived lines are comments, including imports and registrations. They add no
 runnable coverage. Re-admission needs distinct new evidence and owner-requested
 test work; a testing request alone does not make low-tier cases useful.
 
-## Real existing profiles for live qualification · 12 November 2026
+## Real native Claude Subscription
 
-Live gates use a real existing provider profile and Subscription ID directly. The default Claude selection is the existing `anthropic` record. Layout 2 keeps normal Driver state under `~/.arbol/drivers/claude` and uses the plain Keychain service name. The packaged live runner still defaults to the layout-1 state directory, so set `ARBOL_BUILD_TEST_STATE_DIR` explicitly when running it with layout-2 state. `ARBOL_BUILD_LIVE_SUBSCRIPTION` selects an existing real ID. The historical environment name `ARBOL_BUILD_TEST_STATE_DIR` remains an override for an existing real Driver state directory. Missing, signed-out and test-* selections refuse before inference. Qualification never creates a profile, aliases one, copies authentication or starts sign-in.
+The owner directed that authentication evidence use only the real Claude Code Subscription. The live gate uses the existing `anthropic` route and the normal native `~/.claude` profile. The current layout-2 Driver state default is `~/.arbol/drivers/claude`. `ARBOL_BUILD_TEST_STATE_DIR` can select an existing absolute, admitted Arbol state directory with the real native route. The gate checks existing signed-in Arbol state and fresh native status before inference. It accepts only `anthropic` as the live selection. The ABR-38 preflight binds the exact installed Claude Code executable and confirms the native Claude Subscription authentication method. Retain the boolean evidence without account details.
 
-The real profile retains its native credential binding and normal vendor behavior. Application databases, runtime and Build registry remain disposable. Full Build gates, real inference and actual completion and usage observations remain required. Earlier test-profile records keep their historical scope.
+The packaged live check keeps one Haiku request and verifies the observed completion and usage. Application state and Build registry remain disposable. ABR-38 owns sealed entry resolution, the independently admitted whole unit runner and live dispatcher, and the registered ordinary Build. The descriptor still runs the original `unit`, `contract` and `live` commands. The shared contract entry runs no mid-tier scenarios during a Build. Native status and sign-in evidence use no login fixtures. Prior test-profile and sign-in-flow cases are historical.
