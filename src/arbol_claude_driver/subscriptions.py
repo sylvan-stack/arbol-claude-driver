@@ -19,11 +19,10 @@ from .paths import state_directory
 from typing import Any
 
 from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
-from .metadata import Broker
 from .identity import canonical_id, private_file, unsafe
 from .identity_protocol import sync_directory, token, valid_token
-from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, python_launcher, require_tool, spawn
-from .state import State, durable_delete, owner_alive, parse_owner, private_directory, process_owner, read_json, write_json
+from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, require_tool, spawn
+from .state import State, durable_delete, owner_alive, parse_owner, process_owner, read_json, write_json
 
 FAMILIES: list[Record] = [
     {'id': 'anthropic', 'label': 'Anthropic', 'auth': 'vendor_login', 'settings': {'type': 'object', 'properties': {}, 'additionalProperties': False}},
@@ -32,7 +31,7 @@ FAMILIES: list[Record] = [
 
 def native_sign_in_required() -> Failure:
     return Failure(
-        'not_signed_in', 'Claude Code reports no active account.',
+        'not_signed_in', 'This Subscription needs an active Claude Code account.',
         {'remedy': 'Sign in directly in Claude Code, then refresh the Subscription.'},
     )
 
@@ -204,6 +203,8 @@ class Subscriptions:
             if not label:
                 raise Failure('invalid_input', 'Give the Subscription a non-empty label.')
             async with self.mutation(identifier):
+                if read_json(self.state.subscription(identifier) / 'sign-in.json') is not None:
+                    raise Failure('in_use', 'An earlier Subscription operation is still active or needs recovery.')
                 record = await self.record(identifier)
                 write_json(self.state.subscription(identifier) / 'record.json', {**record, 'label': label, 'updatedAt': now()})
         return await self.get(identifier)
@@ -243,11 +244,6 @@ class Subscriptions:
                 current.update(state='needs_attention', problem=failure, checkedAt=now())
             current['updatedAt'] = now()
             write_json(self.state.subscription(initial['id']) / 'record.json', current)
-
-
-def is_test(identifier: str) -> bool:
-    """A test Subscription, such as `test-anthropic`, keeps a home of its own for probes and live checks (CLD-D20)."""
-    return identifier.startswith('test-')
 
 
 def keychain_service(directory: Path, home: str = ACTUAL_HOME) -> str:
@@ -435,10 +431,10 @@ class Authentication:
         if await owner_alive(progress['owner']):
             return
         if progress.get('tool') and await owner_alive(progress['tool']):
-            kill_group(progress['tool']['pid'], signal.SIGKILL)
+            return
         async with self.subscriptions.state.lock(identifier, allow_pending=True):
             current = self.progress(identifier)
-            if self.same_progress(current, progress):
+            if current == progress:
                 if self.subscriptions.matches(identifier, progress.get('identity')):
                     shutil.rmtree(self.temporary(identifier), ignore_errors=True)
                 # Reap only this exact dead old progress slot, never its account
@@ -454,48 +450,26 @@ class Authentication:
                     if path.name not in {'zai', 'claude-zai'} and not (isinstance(record, dict) and record.get('family') == 'zai'):
                         await self.clean_progress(path.name)
 
-    async def reserve(self, identifier: str, operation: str, *, lifetime: Record | None = None) -> Record:
+    def require_idle(self, identifier: str) -> None:
+        if self.progress(identifier) is not None:
+            raise Failure('in_use', 'An earlier Subscription operation is still active or needs recovery.')
+
+    async def reserve(self, identifier: str, operation: str, *, lifetime: Record | None) -> Record:
         await self.clean_progress(identifier)
-        _, captured = await self.subscriptions.snapshot(identifier)
-        if lifetime is None:
-            lifetime = captured
+        if self.cancel.is_set():
+            raise Failure('tool_failed', 'The operation was stopped.')
         owner = await process_owner(os.getpid())
         if owner is None:
             raise Failure('internal', 'Cannot identify the Driver process.')
-        deadline = time.monotonic() + fixed_wait(5000)
-        signalled: set[tuple[int, str]] = set()
-        while True:
-            if self.cancel.is_set():
-                raise Failure('tool_failed', 'The operation was stopped.')
-            async with self.subscriptions.mutation(identifier):
-                if not self.subscriptions.matches(identifier, lifetime):
-                    raise Failure('in_use', 'The Subscription lifetime changed before reservation.')
-                await self.subscriptions.record(identifier)
-                current = self.progress(identifier)
-                if current:
-                    if not self.subscriptions.matches(identifier, current.get('identity')):
-                        raise Failure('in_use', 'An earlier Subscription operation requires recovery.')
-                    if current.get('operation', 'sign_in') != 'sign_in':
-                        raise Failure('in_use', 'The Subscription is being signed out or removed.')
-                    current['stopReason'] = 'replaced' if operation == 'sign_in' else 'signed_out'
-                    write_json(self.path(identifier), current)
-                else:
-                    current = {'owner': owner, 'operation': operation, 'expiresAt': now(time.time() + fixed_wait(300000)), 'attempt': token(), **({'identity': lifetime} if lifetime is not None else {})}
-                    write_json(self.path(identifier), current)
-                    return current
-            if await owner_alive(current['owner']):
-                identity = (current['owner']['pid'], current['owner']['startedAt'])
-                if identity not in signalled:
-                    try:
-                        os.kill(current['owner']['pid'], signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
-                    signalled.add(identity)
-            else:
-                await self.clean_progress(identifier)
-            if time.monotonic() >= deadline:
-                raise Failure('in_use', 'The previous sign-in did not stop within five seconds.')
-            await asyncio.sleep(fixed_wait(50))
+        async with self.subscriptions.mutation(identifier):
+            if not self.subscriptions.matches(identifier, lifetime):
+                raise Failure('in_use', 'The Subscription lifetime changed before reservation.')
+            await self.subscriptions.record(identifier)
+            self.require_idle(identifier)
+            progress = {'owner': owner, 'operation': operation, 'expiresAt': now(time.time() + fixed_wait(300000)),
+                        'attempt': token(), **({'identity': lifetime} if lifetime is not None else {})}
+            write_json(self.path(identifier), progress)
+            return progress
 
     async def release(self, identifier: str, reservation: Record, *, allow_pending: bool = False) -> None:
         async with self.subscriptions.state.lock(identifier, allow_pending=True):
@@ -512,10 +486,12 @@ class Authentication:
             if not self.subscriptions.matches(identifier, lifetime):
                 raise Failure('in_use', 'The Subscription lifetime changed while the operation was in progress.')
             record = await self.subscriptions.record(identifier)
-            if owner:
+            if owner is None:
+                self.require_idle(identifier)
+            else:
                 progress = self.progress(identifier)
                 if not self.same_progress(progress, owner) or progress is None or progress.get('stopReason'):
-                    raise Failure('in_use', 'Another operation replaced this sign-in.')
+                    raise Failure('in_use', 'Another operation replaced this reservation.')
             if revision is not None and record['updatedAt'] != revision:
                 raise Failure('in_use', 'The Subscription changed while the vendor was answering. Retry the operation.')
             write_json(self.subscriptions.state.subscription(identifier) / 'record.json', {**change(record), 'updatedAt': now()})
@@ -549,35 +525,38 @@ class Authentication:
         return {'accepted': value['loggedIn'], **({'account': account} if account else {})}
 
     async def require_native_login(self, identifier: str, lifetime: Record | None, *, program: str | None = None) -> None:
+        self.require_idle(identifier)
         if not (await self.status(identifier, lifetime, program=program))['accepted']:
             raise native_sign_in_required()
 
-    async def rejection(self, initial: Record, failure: Failure, lifetime: Record | None = None) -> None:
-        await self.save(initial['id'], lambda record: {**record, 'state': 'needs_attention', 'problem': failure.result, 'checkedAt': now()}, initial['updatedAt'], lifetime=lifetime)
-
     async def check(self, identifier: str) -> Record:
+        self.subscriptions.require_native_route(identifier)
         await self.clean_progress(identifier)
         initial, lifetime = await self.subscriptions.snapshot(identifier)
-        if initial['state'] == 'signed_out':
-            raise Failure('not_signed_in', 'Sign in to this Subscription first.', {'remedy': 'Sign in.'})
-        try:
-            account = None
-            status = await self.status(identifier, lifetime)
+        self.require_idle(identifier)
+        status = await self.status(identifier, lifetime)
+        account = status.get('account')
+        checked_at = now()
+
+        def observed(record: Record) -> Record:
             if not status['accepted']:
-                raise Failure('credential_rejected', 'claude reports that the account is not logged in.', {'remedy': 'Sign in.'})
-            account = status.get('account')
-            await self.save(identifier, lambda record: {**{k: v for k, v in record.items() if k not in {'problem', 'account'}}, 'state': 'signed_in', **({'account': account} if account else {}), 'checkedAt': now()}, initial['updatedAt'], lifetime=lifetime)
-        except Failure as error:
-            if error.result['code'] != 'credential_rejected':
-                raise
-            await self.rejection(initial, error, lifetime)
+                return {**self.unsigned(record), 'state': 'needs_attention',
+                        'problem': native_sign_in_required().result, 'checkedAt': checked_at}
+            updated = {key: value for key, value in record.items() if key not in {'problem', 'account'}}
+            if record.get('account') != account:
+                updated.pop('lastUsage', None)
+            if account:
+                updated['account'] = account
+            return {**updated, 'state': 'signed_in', 'checkedAt': checked_at}
+
+        await self.save(identifier, observed, initial['updatedAt'], lifetime=lifetime)
         return await self.subscriptions.get(identifier)
 
     async def usage(self, identifier: str) -> Record:
         self.subscriptions.require_native_route(identifier)
         initial = await self.subscriptions.get(identifier)
         if initial['state'] != 'signed_in':
-            return {'outcome': 'needs_sign_in', 'message': 'Sign in to this Subscription first.', 'fetchedAt': now(), 'windows': []}
+            return {'outcome': 'needs_sign_in', 'message': 'Sign in directly in Claude Code, then refresh the Subscription.', 'fetchedAt': now(), 'windows': []}
         return dict(initial.get('lastUsage', {'outcome': 'unsupported', 'message': 'Usage is available after a run reports it.', 'fetchedAt': now(), 'windows': []}))
 
     async def models(self, identifier: str) -> Record:
@@ -633,130 +612,18 @@ class Authentication:
                 await child.wait()
                 await drain
 
-    async def sign_in(self, identifier: str, by_code: bool, emit: Callable[[Record], Awaitable[None]], input_reader: asyncio.StreamReader) -> int:
-        initial, lifetime = await self.subscriptions.snapshot(identifier)
-        if by_code and initial['family'] != 'anthropic':
-            raise Failure('unsupported', 'This family has no code sign-in.')
-        progress = await self.reserve(identifier, 'sign_in', lifetime=lifetime)
-        child = None
-        succeeded = False
-        timed_out = False
-        output = ''
-        broker: Broker | None = None
+    async def sign_in(self, identifier: str, by_code: bool, emit: Callable[[Record], Awaitable[None]]) -> int:
         try:
-            if not is_test(identifier):
-                # `anthropic` is the sign-in of every `claude` on this Mac: when it is already
-                # logged in, take that login and start none, so it is never replaced (CLD-D19).
-                existing = await self.status(identifier, lifetime)
-                if existing['accepted']:
-                    await self.save(identifier, lambda record: {**{k: v for k, v in record.items() if k not in {'problem', 'account'}}, 'state': 'signed_in', **({'account': existing['account']} if existing.get('account') else {}), 'checkedAt': now()}, owner=progress)
-                    succeeded = True
-                    await self.release(identifier, progress)
-                    await emit({'step': 'done', 'subscription': await self.subscriptions.get(identifier)})
-                    return 0
-            await self.save(identifier, self.unsigned, owner=progress)
-            async with asyncio.timeout(max(.001, epoch(progress['expiresAt']) - time.time())):
-                folder = self.temporary(identifier)
-                private_directory(folder)
-                address = folder / 'address'
-                browser = folder / 'browser'
-                broker = await Broker.start(self.subscriptions.state, identifier, progress, 'login')
-                python_launcher(browser, broker.notification_code('address'))
-                env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
-                child = await spawn(await self.tool(), ['auth', 'login', '--claudeai'], {**env, 'BROWSER': str(browser)}, str(self.subscriptions.folder()))
-                assert child.stdout and child.stderr and child.stdin
-                tool = await process_owner(child.pid)
-                async with self.subscriptions.state.lock(identifier, allow_pending=True):
-                    current = self.progress(identifier)
-                    if current is not None and self.same_progress(current, progress) and self.subscriptions.matches(identifier, progress.get('identity')):
-                        write_json(self.path(identifier), {**current, **({'tool': tool} if tool else {})})
-                async def collect() -> None:
-                    nonlocal output
-                    assert child and child.stdout
-                    while chunk := await child.stdout.read(65536):
-                        output += chunk.decode('utf-8', 'replace')
-                        if len(output.encode()) > 2 * 1024 * 1024:
-                            raise Failure('tool_failed', 'The child command returned too much output.')
-                reader = asyncio.create_task(collect())
-                drainer = asyncio.create_task(child.stderr.read())
-                url = None
-                while not url and child.returncode is None:
-                    if self.cancel.is_set():
-                        raise Failure('tool_failed', 'Sign-in was cancelled.')
-                    if by_code:
-                        url = next((value for value in re.findall(r'https://[^\s]+', output) if 'platform.claude.com%2Foauth%2Fcode%2Fcallback' in value or 'platform.claude.com/oauth/code/callback' in value), None)
-                    elif address.exists():
-                        url = address.read_text()
-                    if not url:
-                        await asyncio.sleep(fixed_wait(50))
-                if url:
-                    allowed = ['claude.com', 'claude.ai', 'platform.claude.com', 'localhost']
-                    if urllib.parse.urlparse(url).hostname not in allowed:
-                        raise Failure('tool_failed', 'claude returned a sign-in address on an unexpected host.')
-                    await emit({'step': 'open_url', 'url': url, 'allowedHosts': allowed, 'expiresAt': progress['expiresAt']})
-                    if by_code:
-                        await emit({'step': 'enter_code', 'prompt': 'Enter the one-time code shown by Claude.', 'expiresAt': progress['expiresAt']})
-                        input_task = asyncio.create_task(input_reader.readline())
-                        stop_task = asyncio.create_task(self.cancel.wait())
-                        await asyncio.wait([input_task, stop_task], return_when=asyncio.FIRST_COMPLETED)
-                        stop_task.cancel()
-                        if self.cancel.is_set():
-                            input_task.cancel()
-                            raise Failure('tool_failed', 'Sign-in was cancelled.')
-                        try:
-                            value = loads(await input_task)
-                        except ValueError:
-                            raise Failure('invalid_input', 'Enter the code as one JSON line.') from None
-                        if not isinstance(value, dict) or not isinstance(value.get('input'), str) or not value['input'] or re.search('[\r\n]', value['input']):
-                            raise Failure('invalid_input', 'Enter one nonempty code.')
-                        child.stdin.write((value['input'] + '\n').encode())
-                        await child.stdin.drain()
-                while child.returncode is None:
-                    if self.cancel.is_set():
-                        raise Failure('tool_failed', 'Sign-in was cancelled.')
-                    await asyncio.sleep(fixed_wait(50))
-                await reader
-                await drainer
-                if child.returncode != 0:
-                    raise Failure('credential_rejected', 'Claude sign-in failed. Try signing in again.', {'remedy': 'Sign in.'})
-                status = await self.status(identifier, lifetime)
-                if not status['accepted']:
-                    raise Failure('credential_rejected', 'claude did not confirm the login.', {'remedy': 'Sign in.'})
-                await self.save(identifier, lambda record: {**record, 'state': 'signed_in', **({'account': status['account']} if status.get('account') else {}), 'checkedAt': now()}, owner=progress)
-            if broker is not None:
-                await broker.close()
-            succeeded = True
-            await self.release(identifier, progress)
-            await emit({'step': 'done', 'subscription': await self.subscriptions.get(identifier)})
-            return 0
-        except BaseException as error:
-            timed_out = isinstance(error, TimeoutError)
-            current = self.progress(identifier)
-            reason = current.get('stopReason') if current else None
-            final_failure = Failure('in_use', 'Another sign-in replaced this attempt.') if reason == 'replaced' else Failure('in_use', 'The Subscription was signed out during this attempt.') if reason == 'signed_out' else Failure('limit_reached', 'Sign-in timed out after five minutes.') if timed_out else Failure('tool_failed', 'Sign-in was cancelled.') if self.cancel.is_set() else error
-            await emit({'step': 'failed', 'error': safe_failure(final_failure)})
-            return 2 if self.cancel.is_set() and not reason else 1
-        finally:
-            if child:
-                kill_group(child.pid, signal.SIGKILL)
-                await child.wait()
-            if broker is not None and not broker.closed:
-                await broker.close()
-            if not succeeded:
-                async with self.subscriptions.state.lock(identifier, allow_pending=True):
-                    current = self.progress(identifier)
-                    if self.same_progress(current, progress) and self.subscriptions.matches(identifier, progress.get('identity')):
-                        write_json(self.subscriptions.state.subscription(identifier) / 'record.json', {**self.unsigned(await self.subscriptions.record(identifier)), 'updatedAt': now()})
-                # Only a test home of its own is signed out here; in ~/.claude this would sign out every `claude` on the Mac.
-                if initial['family'] == 'anthropic' and is_test(identifier) and self.subscriptions.matches(identifier, progress.get('identity')):
-                    env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
-                    cleanup = await inspect_tool(self.subscriptions.state.directory, self.subscriptions.settings.get('toolPath'), self.env, asyncio.Event())
-                    if cleanup.get('path') and cleanup['supported']:
-                        try:
-                            await child_command(cleanup['path'], ['auth', 'logout'], env, str(self.subscriptions.folder()))
-                        except Failure:
-                            pass
-            await self.release(identifier, progress)
+            if by_code:
+                raise Failure('unsupported', 'Complete the sign-in directly in Claude Code.')
+            subscription = await self.check(identifier)
+            if subscription['state'] != 'signed_in':
+                raise native_sign_in_required()
+        except Failure as error:
+            await emit({'step': 'failed', 'error': safe_failure(error)})
+            return 2 if self.cancel.is_set() else 1
+        await emit({'step': 'done', 'subscription': subscription})
+        return 0
 
     async def sign_out(self, identifier: str, force: bool, remove: bool = False) -> Record | None:
         from .continuity import Runs

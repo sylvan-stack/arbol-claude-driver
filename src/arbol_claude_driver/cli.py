@@ -71,7 +71,7 @@ async def main(args: list[str], admission: Admission | None = None) -> int:
         command = parse_arguments(args)
         if command.name.startswith('state '):
             raise Failure('invalid_input', 'State maintenance requires the exclusive registered driver-state route.')
-        if command.name != 'subscriptions identity':
+        if command.name in {'run', 'dev stand-in'}:
             reader, transport = await input_stream()
         if command.name == 'dev stand-in':
             # Vendor stand-ins handle signals like the vendor process itself.
@@ -145,7 +145,7 @@ async def main(args: list[str], admission: Admission | None = None) -> int:
         elif command.name == 'subscriptions usage':
             result = await authenticate.usage(identifier)
         elif command.name == 'subscriptions sign-in':
-            return await authenticate.sign_in(identifier, options.get('by-code') is True, output.json, reader)
+            return await authenticate.sign_in(identifier, options.get('by-code') is True, output.json)
         elif command.name == 'subscriptions sign-out':
             result = await authenticate.sign_out(identifier, options.get('force') is True)
         elif command.name == 'subscriptions remove':
