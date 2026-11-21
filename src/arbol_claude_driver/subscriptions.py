@@ -261,11 +261,17 @@ class Authentication:
             raise Failure('internal', 'Malformed sign-in attempt.')
         if 'tool' in value:
             parse_owner(value['tool'])
+        if 'localOnly' in value and (
+            value['localOnly'] is not True or value.get('operation') not in {'sign_out', 'remove'} or 'tool' in value
+        ):
+            raise Failure('internal', 'Malformed local Subscription reservation.')
         return dict(value)
 
     @staticmethod
     def same_progress(current: Record | None, expected: Record) -> bool:
-        return current is not None and all(current.get(key) == expected.get(key) for key in ('owner', 'attempt', 'identity', 'operation'))
+        return current is not None and all(
+            current.get(key) == expected.get(key) for key in ('owner', 'attempt', 'identity', 'operation', 'localOnly')
+        )
 
     async def clean_progress(self, identifier: str) -> None:
         async with self.subscriptions.mutation(identifier):
@@ -279,12 +285,24 @@ class Authentication:
             return
         async with self.subscriptions.state.lock(identifier, allow_pending=True):
             current = self.progress(identifier)
-            if current == progress:
-                if self.subscriptions.matches(identifier, progress.get('identity')):
-                    shutil.rmtree(self.temporary(identifier), ignore_errors=True)
-                # Reap only this exact dead old progress slot, never its account
-                # record or a newer lifetime's temporary/native files.
-                durable_delete(self.path(identifier))
+            if current != progress:
+                return
+            if not progress.get('localOnly'):
+                if identifier != 'anthropic' or progress.get('operation', 'sign_in') != 'sign_in':
+                    # A legacy test route could have launched an unrecorded native logout.
+                    return
+                if 'tool' not in progress:
+                    try:
+                        self.temporary(identifier).lstat()
+                    except FileNotFoundError:
+                        pass
+                    else:
+                        # The callback directory preceded native login spawn.
+                        return
+            if self.subscriptions.matches(identifier, progress.get('identity')):
+                shutil.rmtree(self.temporary(identifier), ignore_errors=True)
+            # Reap only this exact dead slot and never a newer lifetime's files.
+            durable_delete(self.path(identifier))
 
     async def clean_all_progress(self) -> None:
         directory = self.subscriptions.state.directory / 'subscriptions'
@@ -311,7 +329,8 @@ class Authentication:
                 raise Failure('in_use', 'The Subscription lifetime changed before reservation.')
             await self.subscriptions.record(identifier)
             self.require_idle(identifier)
-            progress = {'owner': owner, 'operation': operation, 'expiresAt': now(time.time() + fixed_wait(300000)),
+            progress = {'owner': owner, 'operation': operation, 'localOnly': True,
+                        'expiresAt': now(time.time() + fixed_wait(300000)),
                         'attempt': token(), **({'identity': lifetime} if lifetime is not None else {})}
             write_json(self.path(identifier), progress)
             return progress
