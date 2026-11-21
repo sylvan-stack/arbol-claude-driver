@@ -108,7 +108,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             child_env['ARBOL_CHAT'] = request['chatSessionId']
             if 'cueContext' in request:
                 child_env['ARBOL_DISABLED_HOOK_FEATURES'] = 'cue-card-injection'
-        broker = await Broker.start(subscriptions.state, initial['id'], record, 'run')
+        broker = await Broker.start(subscriptions.state, initial['id'], record)
         launcher, shell = run_launchers(temp, env, broker)
         child_env.update(CLAUDE_CODE_SHELL=str(shell), CLAUDE_CODE_DISABLE_AUTO_MEMORY='1', BASH_DEFAULT_TIMEOUT_MS='300000', BASH_MAX_TIMEOUT_MS='1800000', CLAUDE_CODE_MAX_RETRIES='3')
         if request['searchPath']:

@@ -69,7 +69,7 @@ class Broker:
     closed: bool = False
 
     @classmethod
-    async def start(cls, state: State, identifier: str, reservation: Record, mode: str) -> Broker:
+    async def start(cls, state: State, identifier: str, reservation: Record) -> Broker:
         admission = current_admission()
         ticket = admission.prepare_helper('bin/metadata-helper.py')
         parent, child_channel = socket.socketpair()
@@ -88,9 +88,9 @@ class Broker:
                 # Cancellation cannot abandon a registry-writing worker thread.
                 await handshake
                 raise
-            keys = ('runId', 'subscriptionId', 'owner', 'startedAt', 'identity') if mode == 'run' else ('owner', 'attempt', 'operation', 'identity')
+            keys = ('runId', 'subscriptionId', 'owner', 'startedAt', 'identity')
             reservation = {key: reservation[key] for key in keys if key in reservation}
-            await _send(parent, {'mode': mode, 'stateDirectory': str(state.directory),
+            await _send(parent, {'mode': 'run', 'stateDirectory': str(state.directory),
                                  'subscription': canonical_id(identifier), 'reservation': reservation})
             ready = await _receive(parent)
             if (ready is None or set(ready) != {'type', 'port', 'nonce'} or ready['type'] != 'ready'
@@ -112,17 +112,14 @@ class Broker:
             ticket.child_socket.close()
 
     def notification_code(self, kind: str) -> str:
-        if kind not in ('tool', 'shell', 'address'):
+        if kind not in ('tool', 'shell'):
             raise Failure('internal', 'Unknown metadata notification kind.')
         # This generated client imports stdlib only, writes no Driver file and
         # knows only the notification endpoint. It has no registry authority.
-        return f'''import json,os,socket,struct,subprocess,sys
+        return f'''import json,os,socket,struct,subprocess
 value={{"kind":{kind!r},"nonce":{self.nonce!r}}}
-if {kind!r}=="address":
- value["value"]=sys.argv[1] if len(sys.argv)>1 else ""
-else:
- value["pid"]=os.getpid()
- value["stamp"]=" ".join(subprocess.check_output(["/bin/ps","-p",str(os.getpid()),"-o","lstart="],env={{"PATH":"/usr/bin:/bin","LC_ALL":"C","TZ":"UTC"}},timeout=5).decode("ascii").split())
+value["pid"]=os.getpid()
+value["stamp"]=" ".join(subprocess.check_output(["/bin/ps","-p",str(os.getpid()),"-o","lstart="],env={{"PATH":"/usr/bin:/bin","LC_ALL":"C","TZ":"UTC"}},timeout=5).decode("ascii").split())
 raw=(json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False)+"\\n").encode("utf-8")
 if len(raw)>4096: raise SystemExit(1)
 with socket.create_connection(("127.0.0.1",{self.port}),timeout=20) as channel:
@@ -164,7 +161,6 @@ class Target:
     state: State
     identifier: str
     reservation: Record
-    mode: str
     nonce: str = field(default_factory=token)
     tasks: set[asyncio.Task[Any]] = field(default_factory=set)
     mutex: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -172,49 +168,34 @@ class Target:
     def owns(self) -> bool:
         if self.state.identity is None or not self.state.identity.matches(self.identifier, self.reservation.get('identity')):
             return False
-        keys: tuple[str, ...]
-        if self.mode == 'run':
-            current = read_json(self.state.directory / 'runs' / (self.reservation['runId'] + '.json'))
-            keys = ('runId', 'subscriptionId', 'startedAt', 'owner', 'identity')
-        else:
-            current = read_json(self.state.subscription(self.identifier) / 'sign-in.json')
-            keys = ('owner', 'attempt', 'identity', 'operation')
+        current = read_json(self.state.directory / 'runs' / (self.reservation['runId'] + '.json'))
+        keys = ('runId', 'subscriptionId', 'startedAt', 'owner', 'identity')
         return isinstance(current, dict) and all(current.get(key) == self.reservation.get(key) for key in keys)
 
     async def write(self, value: Record) -> None:
         if value.get('nonce') != self.nonce:
             raise Failure('internal', 'Metadata notification authority does not match.')
         kind = value.get('kind')
-        if kind == 'address' and self.mode == 'login':
-            _check(value, 'kind nonce value')
-            if not isinstance(value['value'], str) or not value['value'] or len(value['value'].encode()) > LIMIT:
-                raise Failure('internal', 'Metadata address notification is malformed.')
-        elif kind in ('tool', 'shell') and self.mode == 'run':
-            _check(value, 'kind nonce pid stamp')
-            if type(value['pid']) is not int or value['pid'] <= 0 or not isinstance(value['stamp'], str):
-                raise Failure('internal', 'Metadata process notification is malformed.')
-            if not await owner_alive(parse_owner({'pid': value['pid'], 'startedAt': ps_time(value['stamp'])})):
-                raise Failure('internal', 'Metadata process owner is no longer current.')
-        else:
+        if kind not in ('tool', 'shell'):
             raise Failure('internal', 'Metadata notification does not match its operation.')
+        _check(value, 'kind nonce pid stamp')
+        if type(value['pid']) is not int or value['pid'] <= 0 or not isinstance(value['stamp'], str):
+            raise Failure('internal', 'Metadata process notification is malformed.')
+        if not await owner_alive(parse_owner({'pid': value['pid'], 'startedAt': ps_time(value['stamp'])})):
+            raise Failure('internal', 'Metadata process owner is no longer current.')
         if value['nonce'] != self.nonce:
             raise Failure('internal', 'Metadata notification authority does not match.')
         async with self.mutex, self.state.lock(self.identifier, allow_pending=True):
             if not self.owns():
                 raise Failure('in_use', 'The metadata writer lifetime or operation changed.')
-            if self.mode == 'login':
-                folder = self.state.directory / 'tmp' / ('sign-in-' + self.identifier)
-                path = folder / 'address'
-                content = value['value']
-            else:
-                folder = self.state.directory / 'tmp' / self.reservation['runId']
-                path = folder / ('tool-owner' if kind == 'tool' else 'shell-calls')
-                content = f"{value['pid']}\t{value['stamp']}\n"
-                if kind == 'shell' and path.exists():
-                    private_file(path)
-                    if path.stat().st_size > MANIFEST_LIMIT - len(content.encode()):
-                        raise Failure('internal', 'Metadata process ledger exceeds its bound.')
-                    content = path.read_text() + content
+            folder = self.state.directory / 'tmp' / self.reservation['runId']
+            path = folder / ('tool-owner' if kind == 'tool' else 'shell-calls')
+            content = f"{value['pid']}\t{value['stamp']}\n"
+            if kind == 'shell' and path.exists():
+                private_file(path)
+                if path.stat().st_size > MANIFEST_LIMIT - len(content.encode()):
+                    raise Failure('internal', 'Metadata process ledger exceeds its bound.')
+                content = path.read_text() + content
             # Parent prepared this exact folder. A retired target may never be
             # recreated by a callback after cleanup.
             physical(folder)
@@ -263,22 +244,17 @@ async def helper(admission: Admission, descriptor: int) -> None:
         _check(config, 'mode stateDirectory subscription reservation')
         identifier = canonical_id(config['subscription'])
         mode, reservation = config['mode'], config['reservation']
-        if mode not in ('run', 'login') or not isinstance(reservation, dict):
+        if mode != 'run' or not isinstance(reservation, dict):
             raise Failure('internal', 'Metadata helper configuration is malformed.')
-        if mode == 'run':
-            _check(reservation, 'runId subscriptionId owner startedAt identity' if 'identity' in reservation else 'runId subscriptionId owner startedAt')
-            canonical_id(reservation['runId'])
-            if reservation['subscriptionId'] != identifier:
-                raise Failure('internal', 'Metadata run target does not match.')
-        else:
-            _check(reservation, 'owner attempt identity operation' if 'identity' in reservation else 'owner attempt operation')
-            if not valid_token(reservation['attempt']) or reservation['operation'] != 'sign_in':
-                raise Failure('internal', 'Metadata login target does not match.')
+        _check(reservation, 'runId subscriptionId owner startedAt identity' if 'identity' in reservation else 'runId subscriptionId owner startedAt')
+        canonical_id(reservation['runId'])
+        if reservation['subscriptionId'] != identifier:
+            raise Failure('internal', 'Metadata run target does not match.')
         parse_owner(reservation.get('owner'))
         directory = physical(config['stateDirectory'])
         state = State(directory)
         state.initialize(admission)
-        target = Target(state, identifier, reservation, mode)
+        target = Target(state, identifier, reservation)
         async with state.lock(identifier, allow_pending=True):
             if not target.owns():
                 raise Failure('in_use', 'Metadata helper target is no longer admitted.')
