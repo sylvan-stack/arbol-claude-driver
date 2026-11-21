@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import pwd
-import re
 import unittest
 
 
@@ -81,12 +80,12 @@ def live(folder: Path) -> int:
     owner = pwd.getpwuid(os.getuid())
     home = Path(owner.pw_dir)
     # The owner's live qualification scope selects an existing real profile directly.
-    state = os.environ.get("ARBOL_BUILD_TEST_STATE_DIR", str(home / "Library/Application Support/Arbol/drivers/claude"))
+    state = os.environ.get("ARBOL_BUILD_TEST_STATE_DIR", str(home / ".arbol/drivers/claude"))
     subscription = os.environ.get("ARBOL_BUILD_LIVE_SUBSCRIPTION", "anthropic")
     if not state or not Path(state).is_absolute():
         raise ValueError("ARBOL_BUILD_TEST_STATE_DIR must name an absolute existing Driver state directory.")
-    if subscription.startswith("test-") or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", subscription):
-        raise ValueError("ARBOL_BUILD_LIVE_SUBSCRIPTION must name a real existing Subscription.")
+    if subscription != "anthropic":
+        raise ValueError("ARBOL_BUILD_LIVE_SUBSCRIPTION must name the existing native anthropic Subscription.")
     if not (Path(state) / "format").is_file() or not (Path(state) / "subscriptions" / subscription / "record.json").is_file():
         raise ValueError("Live qualification requires an existing registered Subscription.")
     # claude finds its Keychain login under the account named by USER; without it the login is invisible.

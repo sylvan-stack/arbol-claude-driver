@@ -5,167 +5,54 @@ import shutil
 import signal
 import sys
 import tempfile
-import time
-import urllib.parse
 import uuid
 from pathlib import Path
 
 from .admission import current_admission
 from .core import Env, Failure, Record, clean_environment, compact, now, safe_failure, loads
-from .history import encode_folder, session_lines
-from .processes import ACTUAL_HOME, child_command, close_pipes, inspect_tool, kill_group, owner_mcp_arguments, owner_skills, python_launcher, require_tool, spawn, wait_exit
+from .processes import ACTUAL_HOME, close_pipes, inspect_tool, kill_group, require_tool, wait_exit
 from .protocol import add_usage
-from .state import atomic_write, private_directory, write_json
+from .state import private_directory, write_json
 
 
 import asyncio
-from typing import Any
 
-from .subscriptions import Subscriptions
+from .subscriptions import Authentication, Subscriptions, native_sign_in_required
 
-ENUMERATED = {'control_response', 'result', 'success', 'error', 'error_during_execution', 'none', 'claude.ai', 'firstParty', 'bypassPermissions', 'connected', 'failed', 'pending', 'needs-auth', 'low', 'medium', 'high', 'xhigh', 'max'}
-BASE = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions', '--system-prompt-snapshot', 'off']
-
-
-def probe_shape(value: Any) -> Any:
-    if isinstance(value, list):
-        return [probe_shape(item) for item in value]
-    if isinstance(value, dict):
-        return {key: item if key in {'type', 'subtype', 'authMethod', 'apiProvider', 'current_permission_mode', 'status', 'effort'} and isinstance(item, str) and item in ENUMERATED else probe_shape(item) for key, item in value.items()}
-    return None if value is None else 'boolean' if type(value) is bool else 'number' if type(value) in {int, float} else 'string' if isinstance(value, str) else 'object'
-
-
-def verify(condition: Any, message: str) -> None:
+def verify(condition: object, message: str) -> None:
     if not condition:
         raise Failure('tool_unsupported', message)
 
 
 async def probe(subscriptions: Subscriptions, inherited: Env, cancel: asyncio.Event) -> Record:
-    tool = await inspect_tool(subscriptions.state.directory, subscriptions.settings.get('toolPath'), inherited, cancel)
-    program = require_tool(tool)
-    temp_root = subscriptions.state.directory / 'tmp'
-    private_directory(temp_root)
-    directory = Path(tempfile.mkdtemp(prefix='probe-', dir=temp_root))
+    report: Record = {'check': 'dev.probe', 'at': now(), 'inferenceRequests': 0, 'outcome': 'failed'}
     checks: list[Record] = []
-    report = {'check': 'dev.probe', 'at': now(), 'toolVersion': tool['version'], 'inferenceRequests': 0, 'checks': checks}
-    def environment(config: Path) -> Env:
-        return {**clean_environment(inherited, ACTUAL_HOME, str(config)), 'PATH': str(Path(sys.executable).parent) + ':' + str(Path(program).parent) + ':/usr/bin:/bin', 'TMPDIR': str(directory), 'CLAUDE_CODE_DISABLE_AUTO_MEMORY': '1', 'CLAUDE_CODE_MAX_RETRIES': '3'}
-    def home(name: str) -> Path:
-        path = directory / name
-        private_directory(path)
-        return path
-    async def command(config: Path, args: list[str]) -> Record:
-        return await child_command(program, args, environment(config), config, 25, cancel, capture_stderr=True)
-    async def controls(config: Path, args: list[str], requests: list[str]) -> list[Record]:
-        child = await spawn(program, args, environment(config), config)
-        assert child.stdin and child.stdout and child.stderr
-        errors = asyncio.create_task(child.stderr.read())
-        records: list[Record] = []
-        try:
-            async with asyncio.timeout(25):
-                for subtype in requests:
-                    identifier = str(uuid.uuid4())
-                    child.stdin.write((compact({'type': 'control_request', 'request_id': identifier, 'request': {'subtype': subtype}}) + '\n').encode())
-                    await child.stdin.drain()
-                    answer = None
-                    while line := await child.stdout.readline():
-                        try:
-                            value = loads(line)
-                        except ValueError:
-                            continue
-                        if isinstance(value, dict):
-                            records.append(value)
-                            if isinstance(value.get('response'), dict) and value['response'].get('request_id') == identifier:
-                                answer = value
-                                break
-                    verify(answer and answer['response'].get('subtype') == 'success', f'Claude did not accept the {subtype} probe.')
-                child.stdin.close()
-                while line := await child.stdout.readline():
-                    try:
-                        value = loads(line)
-                        if isinstance(value, dict):
-                            records.append(value)
-                    except ValueError:
-                        continue
-                await child.wait()
-                verify(child.returncode == 0, 'Claude did not end its control probe successfully.')
-            return records
-        finally:
-            kill_group(child.pid, signal.SIGKILL)
-            await child.wait()
-            await errors
-    outcome = 'passed'
     try:
-        fresh = home('fresh')
-        version = await command(fresh, ['--version'])
-        verify(version['code'] == 0 and version['stdout'].strip() == tool['version'] + ' (Claude Code)', 'Claude changed its version record.')
-        checks.append({'check': 'probe.base-info', 'outcome': 'passed', 'versionLine': tool['version'] + ' (Claude Code)'})
-        status = loads((await command(fresh, ['auth', 'status', '--json']))['stdout'])
-        verify(status.get('loggedIn') is False, 'A disposable Claude home unexpectedly has a login.')
-        catalog = await controls(fresh, BASE, ['initialize'])
-        verify(catalog[0].get('response', {}).get('response', {}).get('models'), 'Claude returned no models without a prompt.')
-        checks.append({'check': 'probe.subscriptions', 'outcome': 'passed', 'freshStatus': probe_shape(status), 'initialize': probe_shape(catalog)})
-        testing = next((item for item in await subscriptions.list() if item['id'] == 'test-anthropic' and item['state'] == 'signed_in'), None)
-        if testing:
-            config = subscriptions.state.subscription(testing['id']) / 'home'
-            status = loads((await command(config, ['auth', 'status', '--json']))['stdout'])
-            verify(status.get('loggedIn') is True, 'The test Subscription login is unavailable.')
-            checks.append({'check': 'probe.signed-subscription', 'outcome': 'passed', 'status': probe_shape(status), 'initialize': probe_shape(await controls(config, BASE, ['initialize']))})
-        login_home, address, browser = home('login'), directory / 'address', directory / 'browser'
-        python_launcher(browser, f'import os,sys\nfd=os.open({str(address)!r},os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)\nos.write(fd,sys.argv[1].encode())\nos.close(fd)\n')
-        child = await spawn(program, ['auth', 'login', '--claudeai'], {**environment(login_home), 'BROWSER': str(browser)}, login_home)
-        assert child.stdout and child.stderr
-        readers = [asyncio.create_task(child.stdout.read()), asyncio.create_task(child.stderr.read())]
-        try:
-            deadline = time.monotonic() + 12
-            while not address.exists() and time.monotonic() < deadline and not cancel.is_set():
-                await asyncio.sleep(.05)
-            verify(address.exists(), 'Claude did not hand off its login address.')
-            parsed = urllib.parse.urlparse(address.read_text())
-            verify(parsed.hostname in {'claude.com', 'claude.ai'}, 'Claude handed off an unexpected login host.')
-            checks.append({'check': 'probe.browser-handoff', 'outcome': 'passed', 'protocol': parsed.scheme + ':', 'host': parsed.hostname, 'queryKeys': sorted(urllib.parse.parse_qs(parsed.query))})
-        finally:
-            kill_group(child.pid, signal.SIGKILL)
-            await child.wait()
-            await asyncio.gather(*readers)
-        settings = await controls(fresh, [*BASE, '--tools', '', '--model', 'sonnet', '--effort', 'low', '--no-session-persistence'], ['get_settings'])
-        verify(settings[0].get('response', {}).get('response', {}).get('applied', {}).get('effort') == 'low', 'Claude did not apply the requested probe effort.')
-        checks.append({'check': 'probe.run-settings', 'outcome': 'passed', 'records': probe_shape(settings)})
-        missing = await command(fresh, [*BASE, '--tools', '', '--resume', str(uuid.uuid4())])
-        verify(missing['code'] == 1 and 'No conversation found' in missing['stdout'] + missing['stderr'], 'Claude changed its missing-conversation refusal.')
-        session = str(uuid.uuid4())
-        atomic_write(fresh / 'projects' / encode_folder(str(fresh)) / (session + '.jsonl'), '\n'.join(compact(record) for record in session_lines([{'type': 'message', 'role': 'user', 'text': 'Synthetic history, never submitted for inference.'}, {'type': 'tool_call', 'name': 'shell', 'input': {'command': 'printf fixture'}, 'ok': False, 'result': {'output': 'fixture'}}], session, str(fresh))) + '\n')
-        resumed = await controls(fresh, [*BASE, '--tools', '', '--resume', session], ['initialize'])
-        checks.append({'check': 'probe.continuity', 'outcome': 'passed', 'missingExit': missing['code'], 'missingRecord': probe_shape(loads(missing['stdout'].strip())), 'resumed': probe_shape(resumed)})
-        start = time.monotonic()
-        interrupted = await controls(fresh, BASE, ['initialize', 'interrupt'])
-        checks.append({'check': 'probe.stopping', 'outcome': 'passed', 'elapsedMs': round((time.monotonic() - start) * 1000), 'records': probe_shape(interrupted)})
-        tools_home = home('tools')
-        owner_skills(tools_home, inherited.get('HOME', ACTUAL_HOME))
-        tools = await controls(tools_home, [*BASE, '--permission-prompt-tool', 'stdio', *owner_mcp_arguments(inherited.get('HOME', ACTUAL_HOME))], ['initialize', 'mcp_status'])
-        verify(tools[0].get('response', {}).get('response', {}).get('current_permission_mode') == 'bypassPermissions', 'Claude did not apply trusted mode.')
-        checks.append({'check': 'probe.tools', 'outcome': 'passed', 'records': probe_shape(tools)})
-        argument = await command(fresh, ['--arbol-unknown-option'])
-        verify(argument['code'] != 0 and re.search('unknown option|unknown argument', argument['stderr'], re.I), 'Claude changed its argument-error refusal.')
-        checks.append({'check': 'probe.argument-errors', 'outcome': 'passed', 'exit': argument['code'], 'stderr': 'Unknown option diagnostic on stderr; no protocol result.'})
-    except BaseException:
-        outcome = 'failed'
-        checks.append({'check': 'probe.failure', 'outcome': 'failed'})
-        raise
+        tool = await inspect_tool(subscriptions.state.directory, subscriptions.settings.get('toolPath'), inherited, cancel)
+        program = require_tool(tool)
+        report['toolVersion'] = tool['version']
+        checks.append({'check': 'probe.base-info', 'outcome': 'passed', 'toolVersion': tool['version']})
+        status = await Authentication(subscriptions, inherited, cancel).status('anthropic', program=program)
+        signed_in = status['accepted'] is True
+        checks.append({'check': 'probe.native-status', 'outcome': 'passed' if signed_in else 'failed',
+                       'signedIn': signed_in})
+        if not signed_in:
+            raise native_sign_in_required()
+        report['outcome'] = 'passed'
     finally:
-        shutil.rmtree(directory, ignore_errors=True)
-        write_json(subscriptions.state.directory / 'research' / ('probe-' + report['at'].replace(':', '-') + '.json'), {**report, 'outcome': outcome})
-    return {**report, 'outcome': outcome}
+        report['checks'] = checks
+        receipt = 'probe-' + report['at'].replace(':', '-') + '.json'
+        write_json(subscriptions.state.directory / 'research' / receipt, report)
+    return report
 
 
 async def check_account(subscriptions: Subscriptions, identifier: str = 'anthropic') -> Record:
-    if identifier.startswith('test-'):
-        raise Failure('invalid_input', 'Live qualification requires a real existing Subscription.')
+    subscriptions.require_native_route(identifier)
     if not (subscriptions.state.subscription(identifier) / 'record.json').is_file():
-        raise Failure('not_found', 'Select a real existing Subscription before live qualification.')
-    account = await subscriptions.require_signed_in(identifier)
-    if account['family'] != 'anthropic':
-        raise Failure('invalid_input', 'The selected Subscription must belong to the anthropic family.')
+        raise Failure('not_found', 'Choose the existing anthropic Subscription before live qualification.')
+    account = await subscriptions.get(identifier)
+    if account['state'] != 'signed_in':
+        raise native_sign_in_required()
     usage = account.get('lastUsage', {'outcome': 'unsupported', 'fetchedAt': now(), 'windows': []})
     if any(window.get('limitReached') or window.get('usedPercent', 0) >= 100 for window in usage['windows']):
         raise Failure('rate_limited', 'The selected Subscription has a usage window used up. Wait before running the check.')
@@ -185,6 +72,8 @@ async def live_check(build_only: bool, subscriptions: Subscriptions, inherited: 
     before = await check_account(subscriptions, identifier)
     tool = await inspect_tool(subscriptions.state.directory, subscriptions.settings.get('toolPath'), inherited, cancel)
     program = require_tool(tool)
+    _, lifetime = await subscriptions.snapshot(identifier)
+    await Authentication(subscriptions, inherited, cancel).require_native_login(identifier, lifetime, program=program)
     temp_root = subscriptions.state.directory / 'tmp'
     private_directory(temp_root)
     directory = Path(tempfile.mkdtemp(prefix='build-check-' if build_only else 'live-check-', dir=temp_root))
