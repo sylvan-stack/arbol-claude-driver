@@ -327,18 +327,8 @@ def read_settings(file: Path) -> tuple[Record, list[Record]]:
                 if any(key in clean['settings'] for key in ('baseUrl', 'modelMap', 'toolEnvironment')):
                     raise retired_route()
             if 'secret' in item:
-                secret = obj(item['secret'], prefix + 'secret')
-                if secret.get('from') == 'keychain':
-                    unknown(secret, ['from'], prefix + 'secret.')
-                    clean['secret'] = {'from': 'keychain'}
-                elif secret.get('from') == 'command':
-                    unknown(secret, ['from', 'command'], prefix + 'secret.')
-                    command = secret.get('command')
-                    if not isinstance(command, list) or not command or not all(isinstance(arg, str) for arg in command) or not command[0]:
-                        bad(prefix + 'secret.command')
-                    clean['secret'] = {'from': 'command', 'command': command}
-                else:
-                    bad(prefix + 'secret.from')
+                raise Failure('invalid_input', f'{file}: {prefix}secret is obsolete.',
+                              {'remedy': 'Remove the secret setting and sign in directly in Claude Code.'})
             settings['subscriptions'][identifier] = clean
     return settings, notices
 

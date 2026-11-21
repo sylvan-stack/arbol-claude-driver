@@ -1,24 +1,18 @@
-"""Independent Subscription records, vendor login and secret-source operations."""
+"""Local Subscription records and nonsecret native account status."""
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import os
-import re
 import shutil
 import signal
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from .paths import state_directory
 from typing import Any
 
-from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, number, safe_failure, safe_text, valid_date, loads, retired_route
+from .core import Env, Failure, Record, clean_environment, compact, epoch, fixed_wait, now, safe_failure, valid_date, loads, retired_route
 from .identity import canonical_id, private_file, unsafe
 from .identity_protocol import sync_directory, token, valid_token
 from .processes import ACTUAL_HOME, child_command, inspect_tool, kill_group, require_tool, spawn
@@ -246,158 +240,9 @@ class Subscriptions:
             write_json(self.state.subscription(initial['id']) / 'record.json', current)
 
 
-def keychain_service(directory: Path, home: str = ACTUAL_HOME) -> str:
-    path = str(directory.resolve())
-    normal = str(state_directory(home).resolve())
-    service = 'com.sylvan-stack.arbol.claude-driver'
-    return service if path == normal else service + '.' + hashlib.sha256(path.encode()).hexdigest()[:12]
-
-
-def validate_key(key: str) -> None:
-    bad = [char for char in key if not '\x21' <= char <= '\x7e'][:3]
-    if not key or bad:
-        detail = ', '.join(f'{compact(char)} (U+{ord(char):04X})' for char in bad)
-        raise Failure('invalid_input', 'The key is empty.' if not key else f'The key contains invalid characters: {detail}.')
-
-
-class Secrets:
-    def __init__(self, service: str, home: str, inherited: Env, cancel: asyncio.Event | None = None, security: str = '/usr/bin/security'):
-        self.service, self.home, self.cancel, self.security = service, home, cancel, security
-        self.env = clean_environment(inherited, home)
-
-    async def item(self, args: list[str], text: str | None = None) -> Record:
-        return await child_command(self.security, args, {**self.env, 'HOME': ACTUAL_HOME}, ACTUAL_HOME, 20, self.cancel, text, '-g' in args)
-
-    async def read(self, identifier: str, source: Record | None = None) -> str | None:
-        if source and source['from'] == 'command':
-            args = source['command']
-            result = await child_command(args[0], args[1:], self.env, self.home, 20, self.cancel)
-            if result['code'] != 0:
-                raise Failure('tool_failed', 'The secret-source command failed. Its output was withheld.')
-            return re.sub(r'\r?\n\Z', '', result['stdout'], count=1)
-        result = await self.item(['find-generic-password', '-s', self.service, '-a', identifier, '-w'])
-        if result['code'] == 44:
-            return None
-        if result['code'] != 0:
-            raise Failure('tool_failed', 'The Keychain item could not be read.')
-        value = re.sub(r'\r?\n\Z', '', result['stdout'], count=1)
-        if re.fullmatch('(?:[0-9a-fA-F]{2})+', value):
-            typed = await self.item(['find-generic-password', '-s', self.service, '-a', identifier, '-g'])
-            if typed['code'] != 0:
-                raise Failure('tool_failed', 'The Keychain item could not be read.')
-            if re.search(r'^password: 0x[0-9a-f]+', typed.get('stderr', ''), re.I | re.M):
-                value = bytes.fromhex(value).decode('utf-8', 'replace')
-        return str(value)
-
-    async def remove(self, identifier: str) -> None:
-        result = await self.item(['delete-generic-password', '-s', self.service, '-a', identifier])
-        if result['code'] not in {0, 44}:
-            raise Failure('tool_failed', 'The Keychain item could not be removed.')
-
-    async def store(self, identifier: str, key: str) -> None:
-        validate_key(key)
-        def quote(value: str) -> str:
-            return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
-        result = await self.item(['-i'], f'add-generic-password -U -s {quote(self.service)} -a {quote(identifier)} -w {quote(key)}\n')
-        if result['code'] != 0 or await self.read(identifier) != key:
-            raise Failure('tool_failed', 'The imported key could not be stored in the Keychain.')
-
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req: urllib.request.Request, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
-        return None
-
-
-async def gateway(base: str, path: str, key: str, timeout: float, cancel: asyncio.Event) -> Any:
-    parsed = urllib.parse.urlparse(base)
-    url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, path, '', '', ''))
-    def fetch() -> Any:
-        request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + key})
-        try:
-            try:
-                response = urllib.request.build_opener(NoRedirect()).open(request, timeout=timeout)
-            except urllib.error.HTTPError as error:
-                response = error
-            with response:
-                status = response.code
-                if status in {401, 403}:
-                    raise Failure('credential_rejected', 'Z.AI rejected the key.', {'remedy': 'Replace the key.', 'detail': {'basis': 'fields', 'vendorStatus': status}})
-                data = response.read(2 * 1024 * 1024 + 1)
-                if len(data) > 2 * 1024 * 1024:
-                    raise Failure('vendor_unavailable', 'Z.AI returned too much data.')
-                try:
-                    value = loads(data)
-                except ValueError:
-                    raise Failure('vendor_unavailable', 'Z.AI returned an unreadable answer.') from None
-                if not 200 <= status < 300 or not isinstance(value, dict) or value.get('success') is False or ('/quota/' in path and value.get('success') is not True):
-                    message = next((value.get(field) for field in ['msg', 'message', 'error'] if isinstance(value, dict) and isinstance(value.get(field), str) and value[field]), 'Z.AI could not answer the request.')
-                    raise Failure('vendor_unavailable', safe_text(str(message), [key])[:240], {'detail': {'basis': 'fields', 'vendorStatus': status}}, [key])
-                return value
-        except Failure:
-            raise
-        except (OSError, ValueError):
-            raise Failure('vendor_unavailable', 'Z.AI could not be reached.') from None
-    task = asyncio.create_task(asyncio.to_thread(fetch))
-    stopped = asyncio.create_task(cancel.wait())
-    try:
-        done, _ = await asyncio.wait([task, stopped], timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
-        if task not in done:
-            task.cancel()
-            raise Failure('vendor_unavailable', 'Z.AI could not be reached.')
-        return await task
-    finally:
-        stopped.cancel()
-        await asyncio.gather(stopped, return_exceptions=True)
-
-
-# What each z.ai quota entry counts (DRV-1.27): tokens, credits, or the monthly MCP calls of a TIME_LIMIT entry.
-QUOTA_RESOURCES = {'TOKENS_LIMIT': 'tokens', 'CREDIT_LIMIT': 'credits', 'TIME_LIMIT': 'calls'}
-
-
-def normalize_quota(value: Any, timestamp: float | None = None, key: str = '') -> Record:
-    current = time.time() if timestamp is None else timestamp
-    if not isinstance(value, dict) or value.get('success') is not True or not isinstance(value.get('data'), dict) or not isinstance(value['data'].get('limits'), list):
-        raise Failure('vendor_unavailable', 'Z.AI returned an unreadable quota answer.')
-    data = value['data']
-    entries = [item for item in data['limits'] if isinstance(item, dict) and item.get('type') in {'TOKENS_LIMIT', 'CREDIT_LIMIT', 'TIME_LIMIT'} and number(item.get('percentage'))]
-    def minutes(item: Record) -> float | None:
-        unit = {1: 1440, 3: 60, 5: 1, 6: 10080}.get(item.get('unit', -1))
-        count: Any = item.get('number')
-        return count * unit if unit is not None and number(count) and count > 0 else None
-    ordered = sorted([item for item in entries if item['type'] != 'TIME_LIMIT'], key=lambda item: minutes(item) or float('inf')) + [item for item in entries if item['type'] == 'TIME_LIMIT']
-    totals: dict[str, float] = {}
-    for item in entries:
-        for model in item.get('usageDetails', []):
-            if isinstance(model, dict) and isinstance(model.get('modelCode'), str) and number(model.get('usage')):
-                totals[model['modelCode']] = totals.get(model['modelCode'], 0) + model['usage']
-    plan = next((data.get(field) for field in ['planName', 'plan', 'plan_type', 'packageName', 'level'] if isinstance(data.get(field), str) and data[field]), None)
-    windows = []
-    for index, item in enumerate(ordered):
-        length = minutes(item)
-        total: Any = item.get('usage')
-        remaining: Any = item.get('remaining')
-        used: Any = item.get('currentValue')
-        percentage = 100 * (total - remaining if number(remaining) else used) / total if number(total) and total > 0 and (number(remaining) or number(used)) else item['percentage']
-        reset = item.get('nextResetTime')
-        valid_reset = number(reset) and not (length == 300 and item['type'] != 'TIME_LIMIT' and reset / 1000 - current > 301 * 60)
-        unit = {1: 'day', 3: 'hour', 5: 'minute', 6: 'week'}.get(item.get('unit', -1))
-        label = 'MCP' if item['type'] == 'TIME_LIMIT' else '5-hour window' if length == 300 else 'Weekly window' if length == 10080 else f'{item.get("number")} {unit}{"" if item.get("number") == 1 else "s"} window' if length is not None else 'Usage window'
-        window: Record = {'kind': 'other' if item['type'] == 'TIME_LIMIT' else 'session' if index == 0 else 'weekly', 'label': label, 'resource': QUOTA_RESOURCES[item['type']], 'usedPercent': int(min(100, max(0, percentage)) * 10 + .5) / 10}
-        if length is not None:
-            window['windowMinutes'] = length
-        if valid_reset and reset is not None:
-            try:
-                window['resetsAt'] = now(reset / 1000)
-            except (OverflowError, ValueError):
-                pass
-        windows.append(window)
-    return {'outcome': 'ok', 'fetchedAt': now(current), 'windows': windows, **({'plan': safe_text(plan, [key])} if plan else {}), **({'extra': {'models': [{'model': safe_text(model, [key]), 'usage': usage} for model, usage in sorted(totals.items(), key=lambda pair: -pair[1])]}} if totals else {})}
-
-
 class Authentication:
     def __init__(self, subscriptions: Subscriptions, env: Env, cancel: asyncio.Event):
         self.subscriptions, self.env, self.cancel = subscriptions, env, cancel
-        self.secrets = Secrets(keychain_service(subscriptions.state.directory), env.get('HOME', ACTUAL_HOME), env, cancel)
 
     def path(self, identifier: str) -> Path:
         return self.subscriptions.state.subscription(identifier) / 'sign-in.json'
@@ -502,14 +347,6 @@ class Authentication:
 
     async def tool(self) -> str:
         return require_tool(await inspect_tool(self.subscriptions.state.directory, self.subscriptions.settings.get('toolPath'), self.env, self.cancel))
-
-    async def key(self, identifier: str) -> str:
-        await self.subscriptions.get(identifier)
-        key = await self.secrets.read(identifier, self.subscriptions.defaults(identifier).get('secret'))
-        if key is None:
-            raise Failure('credential_rejected', 'The Subscription has no key.', {'remedy': 'Replace the key.'})
-        validate_key(key)
-        return key
 
     async def status(self, identifier: str, lifetime: Record | None = None, *, program: str | None = None) -> Record:
         env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
@@ -627,25 +464,20 @@ class Authentication:
 
     async def sign_out(self, identifier: str, force: bool, remove: bool = False) -> Record | None:
         from .continuity import Runs
-        initial = await self.subscriptions.get(identifier)
+        await self.subscriptions.get(identifier)
         if identifier == 'anthropic':
-            # Signing it out would sign out every `claude` on this Mac, the owner's own sessions included (CLD-1.8, DRV-D43).
-            raise Failure('invalid_input', 'The anthropic Subscription is the sign-in of claude itself on this Mac; sign out in claude, not here.')
-        initial, lifetime = await self.subscriptions.snapshot(identifier)
-        runs = Runs(self.subscriptions.state)
-        for record in await runs.list():
-            if record['subscriptionId'] == identifier:
-                if not force:
-                    raise Failure('in_use', 'A run is using the Subscription. Stop it first or use --force.')
-                await runs.stop(record['runId'])
+            raise Failure('invalid_input', 'The anthropic Subscription uses the Claude Code account.',
+                          {'remedy': 'Sign out directly in Claude Code.'})
+        _, lifetime = await self.subscriptions.snapshot(identifier)
         progress = await self.reserve(identifier, 'remove' if remove else 'sign_out', lifetime=lifetime)
         try:
+            runs = Runs(self.subscriptions.state)
+            for record in await runs.list():
+                if record['subscriptionId'] == identifier:
+                    if not force:
+                        raise Failure('in_use', 'A run is using the Subscription. Stop it first or use --force.')
+                    await runs.stop(record['runId'])
             await self.save(identifier, self.unsigned, owner=progress)
-            if initial['family'] == 'anthropic' and initial['state'] != 'signed_out':
-                env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
-                result = await child_command(await self.tool(), ['auth', 'logout'], env, str(self.subscriptions.folder()), cancel=self.cancel)
-                if result['code'] != 0:
-                    raise Failure('tool_failed', 'claude could not sign the account out.')
             if remove:
                 folder = self.subscriptions.state.subscription(identifier)
                 identity = self.subscriptions.state.identity
@@ -660,17 +492,15 @@ class Authentication:
                     if identity is not None and identity.format == 2:
                         witness = identity.capture(identifier)['witness']
                         identity.journal(identifier, 'remove', witness)
-                # Existing native/credential cleanup has succeeded. Publish the
-                # intent before local multi-file cleanup, outside the short lock.
-                for name in ('home', 'chats'):
-                    path = folder / name
-                    if path.resolve(strict=False) != path:
-                        raise unsafe()
-                    try:
-                        shutil.rmtree(path)
-                        sync_directory(folder)
-                    except FileNotFoundError:
-                        pass
+                # Retire the local map only. Any legacy native home belongs to Claude Code.
+                path = folder / 'chats'
+                if path.resolve(strict=False) != path:
+                    raise unsafe()
+                try:
+                    shutil.rmtree(path)
+                    sync_directory(folder)
+                except FileNotFoundError:
+                    pass
                 async with self.subscriptions.state.lock(identifier, allow_pending=True):
                     current = self.progress(identifier)
                     if not self.same_progress(current, progress):
