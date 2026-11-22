@@ -406,5 +406,7 @@ class RunProtocol:
         elif kind == 'rate_limit_event':
             if self.family == 'anthropic':
                 self.last_usage = limit_report(record) or self.last_usage
-        elif kind != 'control_response':
+        # Progress and summaries are informational. The stream reader counts
+        # them as activity, and tool_result still closes calls.
+        elif kind not in {'control_response', 'tool_progress', 'tool_use_summary'}:
             raise protocol_failure()
