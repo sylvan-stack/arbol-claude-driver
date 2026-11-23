@@ -60,7 +60,7 @@ class LocalIdentityTests(unittest.TestCase):
 
     def _create_publication_window(self, window: str, command: str) -> None:
         admission = current_admission()
-        fixture = Fixture.create(admission, uuid.uuid4().hex)
+        fixture = Fixture.create_publication(admission, uuid.uuid4().hex)
         state = State(fixture.root.path / "state")
         parent, peer = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         ticket = None

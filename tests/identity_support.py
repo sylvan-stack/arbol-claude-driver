@@ -287,6 +287,49 @@ class Fixture:
                     error.add_note(f"Fixture descriptor cleanup failed: {cleanup!r}.")
             raise
 
+    @classmethod
+    def create_publication(cls, admission: Admission, case: str) -> Fixture:
+        """Create the original create subject under the sibling workspace fixture root."""
+        require(re.fullmatch(r"[0-9a-f]{32}", case, re.ASCII) is not None, "Invalid create namespace.")
+        context = _suite_current(admission)
+        require(valid_token(context["invocation"]) and valid_token(context["writer"]), "Invalid Suite tokens.")
+        registry_path = admission.authority.registry
+        require(registry_path.name == "builds", "Create subject needs the fixed workspace registry.")
+        directories: list[Directory] = []
+        try:
+            workspace = Directory.root(registry_path.parent)
+            directories.append(workspace)
+            registry = Directory.root(registry_path)
+            directories.append(registry)
+            require(_same(os.fstat(registry.descriptor), os.stat("builds", dir_fd=workspace.descriptor,
+                          follow_symlinks=False))
+                    and admission.authority.identity == {"path": str(registry.path),
+                        "device": registry.identity[0], "inode": registry.identity[1]}
+                    and sha256(canonical(admission.authority.identity)) == context["registrySha256"],
+                    "Workspace registry binding changed.")
+            root = Directory.root(workspace.path / "fixtures")
+            directories.append(root)
+            require(_same(os.fstat(root.descriptor), os.stat("fixtures", dir_fd=workspace.descriptor,
+                          follow_symlinks=False)), "Existing sibling fixture root changed.")
+            for name in (COMPONENT, "create-publication", context["invocation"], case):
+                root = root.child(name, fresh=name == case)
+                directories.append(root)
+            result = cls(admission, case, directories, root)
+            root.exclusive(".fixture-owner.json", canonical({"version": 1, "case": case, "component": COMPONENT,
+                "invocation": context["invocation"], "parentWriter": context["writer"],
+                "payloadSha256": admission.payload.digest}), limit=_FRAME_LIMIT)
+            for name in ("state", "vendor", "local-evidence"):
+                directories.append(root.child(name, fresh=True))
+            result.verify()
+            return result
+        except BaseException as error:
+            for directory in reversed(directories):
+                try:
+                    directory.close()
+                except BaseException as cleanup:
+                    error.add_note(f"Create fixture descriptor cleanup failed: {cleanup!r}.")
+            raise
+
     def verify(self) -> None:
         for directory in self.directories:
             directory.verify()

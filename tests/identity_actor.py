@@ -250,7 +250,7 @@ def _create_stop(admission: Admission, channel: Socket, case: str, window: str) 
     from pathlib import Path
     from typing import Any
 
-    from arbol_claude_driver.identity_protocol import canonical, decode, fields, valid_token
+    from arbol_claude_driver.identity_protocol import canonical, decode, fields, sha256, valid_token
     from arbol_claude_driver.state import State
     from arbol_claude_driver.subscriptions import Subscriptions
 
@@ -264,9 +264,19 @@ def _create_stop(admission: Admission, channel: Socket, case: str, window: str) 
     original: BaseException | None = None
     real_fsync = os.fsync
     try:
-        current = _Directory.root(Path(context["registry"]))
+        registry_path = Path(context["registry"])
+        _require(registry_path.name == "builds", "Create actor needs the fixed workspace registry.")
+        workspace = _Directory.root(registry_path.parent)
+        directories.append(workspace)
+        registry = workspace.existing("builds")
+        directories.append(registry)
+        _require(registry.path == registry_path and admission.authority.identity == {
+            "path": str(registry.path), "device": registry.identity[0], "inode": registry.identity[1]}
+            and sha256(canonical(admission.authority.identity)) == context["registrySha256"],
+            "Create actor registry differs from admission.")
+        current = workspace.existing("fixtures")
         directories.append(current)
-        for name in (".driver-qualification", "fixtures", context["invocation"], case):
+        for name in ("arbol-claude-driver", "create-publication", context["invocation"], case):
             current = current.existing(name)
             directories.append(current)
         fixture = current
