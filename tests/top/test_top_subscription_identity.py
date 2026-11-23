@@ -21,6 +21,7 @@ from arbol_claude_driver.identity_protocol import (
     Object, canonical, decode, fields, inspect_process, read_bytes, sha256, token, valid_hash, valid_token,
 )
 from arbol_claude_driver.admission import current_admission
+from arbol_claude_driver.continuity import Runs
 from arbol_claude_driver.state import State
 from arbol_claude_driver.core import Failure
 from arbol_claude_driver.subscriptions import Authentication, Subscriptions
@@ -566,6 +567,46 @@ class LocalIdentityTests(unittest.TestCase):
 
 
 class LifetimeRaceTests(unittest.TestCase):
+    def test_matching_and_displaced_run_save(self) -> None:
+        asyncio.run(self._conditional_run_save())
+
+    async def _conditional_run_save(self) -> None:
+        subject = ClaudeLocalSubject()
+        state = State(subject.state)
+        try:
+            state.initialize(subject.fixture.admission)
+            subscriptions = Subscriptions(state, {}, [], subject.fixture.root.path / "vendor/settings.json")
+            proof = await subscriptions.identity("anthropic")
+            lifetime = {key: proof[key] for key in ("generation", "witness")}
+            runs = Runs(state)
+            reservation = await runs.reserve({"runId": "local-run", "subscriptionId": "anthropic"},
+                                             "local-conversation", lifetime=lifetime)
+            completed = {**reservation, "labels": {"phase": "matching"}}
+            await runs.save(completed)
+            self.assertEqual(decode(read_bytes(runs.path("local-run")), exact=False)["labels"],
+                             {"phase": "matching"})
+            assert state.identity is not None
+            async with state.lock("anthropic"):
+                state.identity.publish_sidecar("anthropic", token(), "active")
+            successor = await subscriptions.identity("anthropic")
+            self.assertEqual(successor["generation"], lifetime["generation"])
+            self.assertNotEqual(successor["witness"], lifetime["witness"])
+            before = subject.image(subject.state)
+            with self.assertRaises(Failure) as refused:
+                await runs.save({**reservation, "labels": {"phase": "stale"}})
+            self.assertEqual(refused.exception.result["code"], "in_use")
+            self.assertEqual(subject.image(subject.state), before)
+            self.assertEqual(await subscriptions.identity("anthropic"), successor)
+            await runs.remove("local-run", reservation)
+            self.assertFalse(os.path.lexists(runs.path("local-run")))
+            self.assertEqual(await subscriptions.identity("anthropic"), successor)
+            subject.check()
+        finally:
+            try:
+                state.close()
+            finally:
+                subject.close()
+
     def test_matching_and_displaced_record_save(self) -> None:
         asyncio.run(self._conditional_record_save())
 
