@@ -1748,8 +1748,7 @@ CLAUDE_UNIT_ORDER = (
     "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_interrupted_conversion_refuses_list_and_proof_without_recovering",
     "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_native_refusals_preserve_proof_and_native_state",
     "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_lost_or_corrupt_proof_refuses_without_regeneration",
-    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_duplicate_local_create_refuses_without_changing_proof",
-    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_historical_prepared_create_settles_only_its_recorded_witness",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_create_publication_five_real_fsync_windows",
     "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_record_save",
     H1_ID,
 )
