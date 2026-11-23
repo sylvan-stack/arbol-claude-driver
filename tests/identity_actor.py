@@ -1,4 +1,4 @@
-"""Fixed H1 test helper; no gate wiring, runtime use or other actor action yet."""
+"""Fixed H1 and prospective create-stop helper; no gate wiring or runtime use."""
 from __future__ import annotations
 
 # The standalone path validates isolated runtime confinement before importing
@@ -242,6 +242,184 @@ def _lease_hold(admission: Admission, channel: Socket, case: str) -> None:
                 raise BaseExceptionGroup("H1 local cleanup failed; no terminal claim.", errors)
 
 
+def _create_stop(admission: Admission, channel: Socket, case: str, window: str) -> str:
+    """Pause only after the real create publication has fsynced its directory."""
+    import asyncio
+    import socket
+    import time
+    from pathlib import Path
+    from typing import Any
+
+    from arbol_claude_driver.identity_protocol import canonical, decode, fields, valid_token
+    from arbol_claude_driver.state import State
+    from arbol_claude_driver.subscriptions import Subscriptions
+
+    context = admission.context
+    _require(context["component"] == "arbol-claude-driver" and context["entry"] == "tests/identity_actor.py"
+             and context["role"] == "helper" and valid_token(context["invocation"])
+             and valid_token(context["parent"]["writer"]) and not admission.closed,
+             "Create actor does not own the actual helper admission.")
+    directories: list[_Directory] = []
+    state: State | None = None
+    original: BaseException | None = None
+    real_fsync = os.fsync
+    try:
+        current = _Directory.root(Path(context["registry"]))
+        directories.append(current)
+        for name in (".driver-qualification", "fixtures", context["invocation"], case):
+            current = current.existing(name)
+            directories.append(current)
+        fixture = current
+        marker = decode(fixture.read(".fixture-owner.json"))
+        fields(marker, "version case component invocation parentWriter payloadSha256")
+        _require(marker == {"version": 1, "case": case, "component": "arbol-claude-driver",
+                            "invocation": context["invocation"], "parentWriter": context["parent"]["writer"],
+                            "payloadSha256": admission.payload.digest}, "Create fixture ownership differs.")
+        state_directory = fixture.existing("state")
+        directories.append(state_directory)
+        vendor_directory = fixture.existing("vendor")
+        directories.append(vendor_directory)
+        _require(state_directory.read("format") == b"2\n", "Create requires prepared format-two State.")
+        state = State(state_directory.path)
+        state.initialize(admission)
+        identity = state.identity
+        _require(identity is not None, "Create State guard unavailable.")
+        if identity is None:
+            raise AssertionError
+        _require(channel.fileno() not in (admission.lease, identity.descriptor), "Create control aliases authority.")
+        folder = state_directory.path / "subscriptions" / "anthropic-2"
+        _require(not os.path.lexists(folder), "Create subject must be genuinely fresh.")
+        subscriptions = Subscriptions(state, {}, [], vendor_directory.path / "settings.json")
+        observed: list[str] = []
+        witness: str | None = None
+        fired = False
+        injected = False
+
+        def checkpoint(fd: Any) -> None:
+            nonlocal witness, fired, injected
+            real_fsync(fd)
+            if fired or not folder.is_dir():
+                return
+            try:
+                held = os.fstat(fd)
+                named = folder.lstat()
+                if (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino):
+                    return
+                with_dir = _Directory.root(folder)
+            except FileNotFoundError:
+                return
+            try:
+                def maybe(name: str) -> dict[str, object] | None:
+                    try:
+                        return decode(with_dir.read(name), exact=False)
+                    except FileNotFoundError:
+                        return None
+                journal, record, sidecar = maybe("identity-pending.json"), maybe("record.json"), maybe("identity.json")
+            finally:
+                with_dir.close()
+            phase: str | None = None
+            if journal is not None:
+                _require(journal.get("operation") == "create" and valid_token(journal.get("witness")),
+                         "Unexpected create journal at actual fsync.")
+                actual = str(journal["witness"])
+                _require(witness is None or witness == actual, "Create witness changed across publication.")
+                witness = actual
+                if journal.get("phase") == "prepared":
+                    if record is None and sidecar is None:
+                        phase = "C1-prepared-durable"
+                    elif record is not None and sidecar is None:
+                        phase = "C2-record-durable"
+                    elif record is not None and sidecar == {"version": 1, "state": "active", "witness": witness}:
+                        phase = "C3-sidecar-durable"
+                elif journal.get("phase") == "committed" and record is not None and sidecar == {
+                    "version": 1, "state": "active", "witness": witness,
+                }:
+                    phase = "C4-committed-durable"
+            elif witness is not None and record is not None and sidecar == {
+                "version": 1, "state": "active", "witness": witness,
+            } and "C4-committed-durable" in observed:
+                phase = "C5-clear-durable"
+            if phase is None or phase in observed:
+                return
+            order = ("C1-prepared-durable", "C2-record-durable", "C3-sidecar-durable",
+                     "C4-committed-durable", "C5-clear-durable")
+            _require(len(observed) < len(order) and phase == order[len(observed)],
+                     "Create did not reach the prescribed durable order.")
+            observed.append(phase)
+            if phase != window:
+                return
+            fired = True
+            ready = canonical({"version": 1, "kind": "actor-ready", "case": case,
+                               "action": "create-stop", "window": window})
+            deadline = time.monotonic() + 10
+            channel.settimeout(max(.001, deadline - time.monotonic()))
+            channel.sendall(ready)
+            raw = bytearray()
+            while b"\n" not in raw:
+                remaining = deadline - time.monotonic()
+                _require(remaining > 0, "Create parent control expired.")
+                channel.settimeout(remaining)
+                part = channel.recv(4097 - len(raw))
+                _require(bool(part), "Create parent EOF is failure.")
+                raw.extend(part)
+                _require(len(raw) <= 4096, "Create parent control exceeded its bound.")
+            response = decode(bytes(raw))
+            fields(response, "version kind case command")
+            _require(type(response.get("version")) is int and response.get("version") == 1
+                     and response.get("kind") == "actor-control"
+                     and response.get("case") == case and response.get("command") in ("continue", "abort-io"),
+                     "Invalid create parent control.")
+            channel.setblocking(False)
+            try:
+                channel.recv(1, socket.MSG_PEEK)
+                raise ActorFailure("Extra create parent control data or EOF.")
+            except BlockingIOError:
+                pass
+            if response["command"] == "abort-io":
+                injected = True
+                raise OSError("Fixed post-fsync create interruption.")
+
+        os.fsync = checkpoint
+        try:
+            try:
+                result = asyncio.run(subscriptions.create("anthropic", "Local create fixture", "anthropic-2"))
+            except OSError:
+                _require(injected, "Create failed without the requested post-fsync interruption.")
+                outcome = "injected-failure"
+            else:
+                _require(fired and result["id"] == "anthropic-2", "Create acknowledgement was not reached.")
+                outcome = "completed"
+        finally:
+            os.fsync = real_fsync
+        return outcome
+    except BaseException as error:
+        original = error
+        raise
+    finally:
+        os.fsync = real_fsync
+        failures: list[BaseException] = []
+        if state is not None:
+            try:
+                state.close()
+            except BaseException as error:
+                failures.append(error)
+        for directory in reversed(directories):
+            try:
+                directory.close()
+            except BaseException as error:
+                failures.append(error)
+        try:
+            channel.close()
+        except BaseException as error:
+            failures.append(error)
+        if failures:
+            if original is not None:
+                for failure in failures:
+                    original.add_note("Create actor cleanup failed: " + repr(failure))
+            else:
+                raise BaseExceptionGroup("Create actor cleanup failed.", failures)
+
+
 def _bootstrap() -> int:
     global _FINISH_MAY_HAVE_BEGUN
 
@@ -274,7 +452,10 @@ def _bootstrap() -> int:
     try:
         _require(len(sys.argv) == 6 and all(word.isascii() for word in sys.argv[1:]), "Invalid fixed H1 arguments.")
         action, selector, window, case, control_text = sys.argv[1:]
-        _require((action, selector, window) == ("lease-hold", "anthropic-2", "H1-independent-lease")
+        _require(selector == "anthropic-2" and ((action == "lease-hold" and window == "H1-independent-lease")
+                 or (action == "create-stop" and window in (
+                     "C1-prepared-durable", "C2-record-durable", "C3-sidecar-durable",
+                     "C4-committed-durable", "C5-clear-durable")))
                  and re.fullmatch(r"[0-9a-f]{32}", case, re.ASCII) is not None
                  and re.fullmatch(r"[1-9][0-9]{0,4}", control_text, re.ASCII) is not None
                  and 3 <= int(control_text) <= 65535, "Invalid fixed H1 action or namespace.")
@@ -318,25 +499,29 @@ def _bootstrap() -> int:
         for key in AUTHORITY_ENV:
             os.environ.pop(key, None)
         try:
-            _lease_hold(admission, channel, case)
+            if action == "lease-hold":
+                _lease_hold(admission, channel, case)
+                outcome = "completed"
+            else:
+                outcome = _create_stop(admission, channel, case, window)
             channel = None
         except BaseException:
             # No success/terminal reconstruction follows a failed body or EOF.
             # The kernel closes leases on exit; durable unknown custody remains.
             raw_result = canonical({"version": 1, "kind": "actor-result", "case": case,
-                                    "action": "lease-hold", "outcome": "refused"})
+                                    "action": action, "outcome": "refused"})
             os.write(1, raw_result)
             _preterminal_diagnostic(b"H1 local action failed; preserve custody and private evidence.\n")
             return 1
         raw_result = canonical({"version": 1, "kind": "actor-result", "case": case,
-                                "action": "lease-hold", "outcome": "completed"})
+                                "action": action, "outcome": outcome})
         written = os.write(1, raw_result)
         _require(written == len(raw_result), "H1 final result output was incomplete.")
         # All state/loop/control/directory resources and final output are done.
         # Only the genuine API can publish this actor's terminal record.
         _FINISH_MAY_HAVE_BEGUN = True
         admission.finish()
-        return 0
+        return 1 if outcome == "injected-failure" else 0
     except BaseException:
         if _FINISH_MAY_HAVE_BEGUN:
             # Keep the actual API exception/disposition. The standalone owner
