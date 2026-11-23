@@ -6,14 +6,21 @@ import base64
 import json
 import os
 import re
+import selectors
+import signal
+import socket
 import stat
+import subprocess
+import time
 import unittest
+import uuid
 from dataclasses import dataclass
 from typing import ClassVar
 
 from arbol_claude_driver.identity_protocol import (
     Object, canonical, decode, fields, inspect_process, read_bytes, sha256, token, valid_hash, valid_token,
 )
+from arbol_claude_driver.admission import current_admission
 from arbol_claude_driver.state import State
 from arbol_claude_driver.core import Failure
 from arbol_claude_driver.subscriptions import Authentication, Subscriptions
@@ -24,6 +31,185 @@ from identity_support import (
 
 
 class LocalIdentityTests(unittest.TestCase):
+    def test_create_publication_five_real_fsync_windows(self) -> None:
+        windows = ("C1-prepared-durable", "C2-record-durable", "C3-sidecar-durable",
+                   "C4-committed-durable", "C5-clear-durable")
+        for window in windows:
+            for command in ("continue", "abort-io"):
+                with self.subTest(window=window, command=command):
+                    self._create_publication_window(window, command)
+
+    def _create_publication_window(self, window: str, command: str) -> None:
+        admission = current_admission()
+        fixture = Fixture.create(admission, uuid.uuid4().hex)
+        state = State(fixture.root.path / "state")
+        parent, peer = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        ticket = None
+        child: subprocess.Popen[bytes] | None = None
+        owner: Object | None = None
+        guard: H1Child | None = None
+        original: BaseException | None = None
+        try:
+            state.initialize(admission)
+            state.close()
+            parent.set_inheritable(False)
+            peer.set_inheritable(False)
+            ticket = admission.prepare_helper("tests/identity_actor.py")
+            self.assertEqual(len(ticket.pass_fds), 1)
+            self.assertEqual(len({*ticket.pass_fds, parent.fileno(), peer.fileno(), admission.lease}), 4)
+            child = subprocess.Popen([*ticket.prefix, "create-stop", "anthropic-2", window, fixture.case,
+                                      str(peer.fileno())], env=ticket.environment(dict(os.environ)),
+                                     cwd=fixture.root.path, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, close_fds=True,
+                                     pass_fds=(*ticket.pass_fds, peer.fileno()), start_new_session=True)
+            peer.close()
+            observed = inspect_process(child.pid)
+            require(observed is not None and observed.parent == os.getpid(), "Create child identity unavailable.")
+            assert observed is not None
+            owner = observed.owner
+            guard = H1Child(fixture, child, ticket, parent, owner, time.monotonic() + 60,
+                            selectors.DefaultSelector())
+            assert child.stdout is not None and child.stderr is not None
+            for name, stream in (("stdout", child.stdout), ("stderr", child.stderr)):
+                os.set_blocking(stream.fileno(), False)
+                guard.selector.register(stream, selectors.EVENT_READ, name)
+            parent.setblocking(False)
+            guard.selector.register(parent, selectors.EVENT_READ, "control")
+            ticket.acknowledge(child.pid)
+            self.assertTrue(ticket.completed)
+            guard._verify_helper("active")
+            deadline = time.monotonic() + 10
+            raw = bytearray()
+            while b"\n" not in raw:
+                remaining = deadline - time.monotonic()
+                require(remaining > 0, "Create checkpoint timed out.")
+                for key, _ in guard.selector.select(remaining):
+                    if key.data == "control":
+                        part = parent.recv(4097 - len(raw))
+                        require(bool(part), "Create checkpoint ended before readiness.")
+                        raw.extend(part)
+                        require(len(raw) <= 4096, "Create checkpoint exceeded its bound.")
+                    else:
+                        guard._drain(key)
+            self.assertEqual(decode(bytes(raw)), {"version": 1, "kind": "actor-ready", "case": fixture.case,
+                                                   "action": "create-stop", "window": window})
+            guard._verify_helper("active")
+            opened: list[Directory] = []
+            try:
+                directory = fixture.root
+                for name in ("state", "subscriptions", "anthropic-2"):
+                    directory = _existing(directory, name)
+                    opened.append(directory)
+                def read_optional(name: str) -> Object | None:
+                    try:
+                        return decode(directory.read(name), exact=False)
+                    except FileNotFoundError:
+                        return None
+                journal = read_optional("identity-pending.json")
+                record = read_optional("record.json")
+                sidecar = read_optional("identity.json")
+                index = int(window[1])
+                self.assertEqual(record is not None, index >= 2)
+                self.assertEqual(sidecar is not None, index >= 3)
+                self.assertEqual(journal is not None, index <= 4)
+                if record is not None:
+                    self.assertEqual((record["id"], record["family"], record["state"]),
+                                     ("anthropic-2", "anthropic", "signed_out"))
+                if journal is not None:
+                    self.assertEqual((journal["operation"], journal["phase"]),
+                                     ("create", "committed" if index == 4 else "prepared"))
+                witness = journal["witness"] if journal is not None else sidecar["witness"]  # type: ignore[index]
+                self.assertTrue(valid_token(witness))
+                if sidecar is not None:
+                    self.assertEqual(sidecar, {"version": 1, "state": "active", "witness": witness})
+                fixture.retain("create-checkpoint.json", canonical({"version": 1, "window": window,
+                               "command": command, "journal": journal, "record": record, "sidecar": sidecar}))
+            finally:
+                for directory in reversed(opened):
+                    directory.close()
+            response = canonical({"version": 1, "kind": "actor-control", "case": fixture.case, "command": command})
+            parent.setblocking(True)
+            parent.settimeout(10)
+            parent.sendall(response)
+            guard.selector.unregister(parent)
+            deadline = time.monotonic() + 30
+            while guard.selector.get_map() or child.poll() is None:
+                require(time.monotonic() < deadline, "Create actor settlement timed out.")
+                for key, _ in guard.selector.select(.05):
+                    guard._drain(key)
+            child.wait(timeout=max(.001, deadline - time.monotonic()))
+            guard.reaped = True
+            result = decode(bytes(guard.output["stdout"]))
+            outcome = "completed" if command == "continue" else "injected-failure"
+            self.assertEqual(result, {"version": 1, "kind": "actor-result", "case": fixture.case,
+                                      "action": "create-stop", "outcome": outcome})
+            self.assertEqual(child.returncode, 0 if command == "continue" else 1)
+            self.assertEqual(bytes(guard.output["stderr"]), b"")
+            guard._verify_helper("terminal")
+            after_dirs: list[Directory] = []
+            try:
+                after = fixture.root
+                for name in ("state", "subscriptions", "anthropic-2"):
+                    after = _existing(after, name)
+                    after_dirs.append(after)
+                def after_optional(name: str) -> Object | None:
+                    try:
+                        return decode(after.read(name), exact=False)
+                    except FileNotFoundError:
+                        return None
+                final_journal = after_optional("identity-pending.json")
+                final_record = after_optional("record.json")
+                final_sidecar = after_optional("identity.json")
+                if command == "abort-io":
+                    self.assertEqual((final_journal, final_record, final_sidecar), (journal, record, sidecar))
+                else:
+                    self.assertIsNone(final_journal)
+                    self.assertIsNotNone(final_record)
+                    self.assertEqual(final_sidecar, {"version": 1, "state": "active", "witness": witness})
+                fixture.retain("create-settlement.json", canonical({"version": 1, "window": window,
+                               "command": command, "journal": final_journal, "record": final_record,
+                               "sidecar": final_sidecar}))
+            finally:
+                for directory in reversed(after_dirs):
+                    directory.close()
+            fixture.retain("create-actor-result.json", canonical(result))
+            guard._close_endpoints()
+            guard.settled = True
+        except BaseException as error:
+            original = error
+            raise
+        finally:
+            if guard is not None and not guard.settled:
+                errors = guard.abort()
+                if original is not None:
+                    for note in errors:
+                        original.add_note(note)
+                elif errors:
+                    raise AssertionError("Create actor cleanup unresolved: " + "; ".join(errors))
+            elif guard is None:
+                peer.close()
+                parent.close()
+                if child is not None and child.poll() is None:
+                    actual = inspect_process(child.pid)
+                    if owner is not None and actual is not None and actual.parent == os.getpid() and actual.owner == owner:
+                        os.kill(child.pid, signal.SIGTERM)
+                    try:
+                        child.communicate(timeout=20)
+                    except BaseException as cleanup:
+                        if original is not None:
+                            original.add_note("Create child cleanup unresolved: " + repr(cleanup))
+                if ticket is not None:
+                    ticket.child_socket.close()
+                    ticket.frames.close()
+            for close in (state.close, fixture.close):
+                try:
+                    close()
+                except BaseException as cleanup:
+                    if original is not None:
+                        original.add_note("Create parent cleanup failed: " + repr(cleanup))
+                    else:
+                        raise
+
     def test_two_implicit_captures_contend_and_a_fresh_invocation_accepts_exact_proof(self) -> None:
         asyncio.run(self._concurrent_capture())
 
