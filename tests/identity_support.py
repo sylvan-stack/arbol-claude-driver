@@ -23,7 +23,7 @@ import uuid
 import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
-from types import CodeType, TracebackType
+from types import CodeType, FrameType, TracebackType
 from typing import Any, ClassVar, Literal
 
 from arbol_claude_driver.admission import (
@@ -1321,6 +1321,111 @@ class H1Child:
                     error.add_note(note)
             else:
                 raise SpanFailure("H1 span did not settle; " + "; ".join(errors))
+        return False
+
+
+@dataclass(frozen=True)
+class BrokerRegistration:
+    """Actual owner objects and digests retained for the later close witness."""
+
+    broker: Any
+    child: asyncio.subprocess.Process
+    ticket: HelperHandoff
+    handshake: asyncio.Task[Any]
+    owner: Object
+    context_sha256: str
+    handoff_sha256: str
+
+
+class BrokerRegistrationCapture:
+    """Observe one real packaged Broker.start return on this thread only."""
+
+    def __init__(self, admission: Admission) -> None:
+        self.admission = admission
+        self.registration: BrokerRegistration | None = None
+        self.error: BaseException | None = None
+        self.previous: Any = None
+        self.entered = False
+        self.code: CodeType | None = None
+
+    def __enter__(self) -> BrokerRegistrationCapture:
+        from arbol_claude_driver.metadata import Broker
+
+        require(not self.entered and self.registration is None and self.error is None
+                and current_admission() is self.admission,
+                "The entered checker Admission is required for broker capture.")
+        _suite_current(self.admission)
+        relative = "src/arbol_claude_driver/metadata.py"
+        name = str(self.admission.payload.root / relative)
+        module = compile(_payload_bytes(self.admission, relative, limit=_DOCUMENT_LIMIT), name, "exec",
+                         dont_inherit=True, optimize=sys.flags.optimize)
+        classes = [item for item in module.co_consts if isinstance(item, CodeType) and item.co_name == "Broker"]
+        require(len(classes) == 1, "Packaged Broker source is ambiguous.")
+        starts = [item for item in classes[0].co_consts if isinstance(item, CodeType) and item.co_name == "start"]
+        code = getattr(Broker.start, "__func__").__code__
+        require(len(starts) == 1 and code == starts[0] and code.co_filename == name,
+                "Broker.start is not the exact packaged source.")
+        self.code = code
+        self.previous = sys.getprofile()
+        self.entered = True
+        sys.setprofile(self._profile)
+        return self
+
+    def _profile(self, frame: FrameType, event: str, value: Any) -> None:
+        from arbol_claude_driver.metadata import Broker
+
+        if self.previous is not None:
+            self.previous(frame, event, value)
+        if event != "return" or frame.f_code is not self.code or not isinstance(value, Broker):
+            return
+        try:
+            require(self.registration is None and self.error is None, "Multiple broker registrations observed.")
+            child, ticket, handshake = (frame.f_locals.get(key) for key in ("child", "ticket", "handshake"))
+            require(type(child) is asyncio.subprocess.Process and child is value.child
+                    and type(ticket) is HelperHandoff and ticket.parent is self.admission and ticket.completed
+                    and isinstance(handshake, asyncio.Task) and handshake.done() and not handshake.cancelled()
+                    and handshake.result() is None, "Actual broker registration did not complete.")
+            assert isinstance(child, asyncio.subprocess.Process) and isinstance(ticket, HelperHandoff)
+            assert isinstance(handshake, asyncio.Task)
+            live = inspect_process(child.pid)
+            require(live is not None and live.parent == os.getpid(), "Broker direct-child birth is unavailable.")
+            assert live is not None
+            context_raw = read_bytes(ticket.context_path)
+            context = _document(context_raw)
+            normal_context(context)
+            suite = self.admission.context
+            require(context["entry"] == "bin/metadata-helper.py" and context["role"] == "helper"
+                    and context["component"] == COMPONENT and context["process"] == live.owner
+                    and context["parent"] == {"writer": suite["writer"], **suite["process"]}
+                    and context["invocation"] == suite["invocation"] and context["epoch"] == suite["epoch"]
+                    and context["boot"] == suite["boot"] and context["registry"] == suite["registry"]
+                    and context["registrySha256"] == suite["registrySha256"]
+                    and context["payloadSha256"] == self.admission.payload.digest
+                    and context["acceptanceSha256"] == suite["acceptanceSha256"]
+                    and context["handoff"] == ticket.pending["handoff"]
+                    and context["writer"] == ticket.pending["child"], "Broker private context differs.")
+            handoff_raw = read_bytes(self.admission.authority.folder / "handoffs" / (context["handoff"] + ".json"))
+            handoff = _document(handoff_raw)
+            validate("handoff", handoff)
+            require(handoff == {**ticket.pending, "phase": "accepted", "challenge": handoff["challenge"]}
+                    and valid_token(handoff["challenge"]) and handoff["contextSha256"] == sha256(context_raw),
+                    "Broker accepted transfer differs from its private context.")
+            self.registration = BrokerRegistration(value, child, ticket, handshake, dict(live.owner),
+                                                   sha256(context_raw), sha256(handoff_raw))
+        except BaseException as error:
+            self.error = error
+
+    def __exit__(self, kind: type[BaseException] | None, error: BaseException | None,
+                 trace: TracebackType | None) -> Literal[False]:
+        sys.setprofile(self.previous)
+        self.entered = False
+        if error is not None:
+            if self.error is not None:
+                error.add_note("Broker registration observation failed: " + repr(self.error))
+            return False
+        if self.error is not None:
+            raise self.error
+        require(self.registration is not None, "Actual Broker.start return was not observed.")
         return False
 
 
