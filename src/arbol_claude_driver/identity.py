@@ -143,7 +143,10 @@ class IdentityState:
         # marker under the guard before reading the root identity.
         preflight = state_format(directory)
         if preflight == 1:
-            raise Failure('invalid_input', 'Upgrade Driver state under exclusive maintenance before using this Build.')
+            raise Failure(
+                'invalid_input',
+                'This Build requires Driver state layout 2. Migrate the directory under exclusive maintenance.',
+            )
         if not qualified:
             raise Failure('internal', 'Identity state requires qualified normal admission.')
         ensure_directory(directory)
