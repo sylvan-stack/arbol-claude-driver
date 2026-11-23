@@ -1750,6 +1750,7 @@ CLAUDE_UNIT_ORDER = (
     "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_lost_or_corrupt_proof_refuses_without_regeneration",
     "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_create_publication_five_real_fsync_windows",
     "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_record_save",
+    "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_run_save",
     H1_ID,
 )
 CLAUDE_PENDING_CASE_BODIES = ("run-and-chat-completion", "inference-metadata-broker",
