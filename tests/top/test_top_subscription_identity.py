@@ -10,6 +10,7 @@ import selectors
 import signal
 import socket
 import stat
+import struct
 import subprocess
 import time
 import unittest
@@ -21,9 +22,11 @@ from arbol_claude_driver.identity_protocol import (
     Object, canonical, decode, fields, inspect_process, read_bytes, sha256, token, valid_hash, valid_token,
 )
 from arbol_claude_driver.admission import current_admission
-from arbol_claude_driver.continuity import Runs
+from arbol_claude_driver.continuity import Chats, Runs
 from arbol_claude_driver.state import State
 from arbol_claude_driver.core import Failure
+from arbol_claude_driver.history import digest
+from arbol_claude_driver.metadata import Broker
 from arbol_claude_driver.subscriptions import Authentication, Subscriptions
 from identity_support import (
     ClaudeCapture, ClaudeInvocation, ClaudeLocalSubject, Directory, Fixture, H1Child, H1_ID,
@@ -504,6 +507,121 @@ class LocalIdentityTests(unittest.TestCase):
 
 
 class LifetimeRaceTests(unittest.TestCase):
+    def test_matching_and_displaced_inference_metadata_broker(self) -> None:
+        asyncio.run(self._inference_metadata_broker())
+
+    async def _inference_metadata_broker(self) -> None:
+        subject = ClaudeLocalSubject()
+        state = State(subject.state)
+        broker: Broker | None = None
+        try:
+            state.initialize(subject.fixture.admission)
+            subscriptions = Subscriptions(state, {}, [], subject.fixture.root.path / "vendor/settings.json")
+            proof = await subscriptions.identity("anthropic")
+            lifetime = {key: proof[key] for key in ("generation", "witness")}
+            runs = Runs(state)
+            reservation = await runs.reserve({"runId": "broker-run", "subscriptionId": "anthropic"},
+                                             "broker-conversation", lifetime=lifetime)
+            target = state.directory / "tmp" / "broker-run"
+            target.mkdir(parents=True, mode=0o700)
+            broker = await Broker.start(state, "anthropic", reservation)
+            stamp = " ".join(subprocess.check_output(
+                ["/bin/ps", "-p", str(os.getpid()), "-o", "lstart="],
+                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "TZ": "UTC"}, timeout=5,
+            ).decode("ascii").split())
+
+            async def notify(kind: str) -> bytes:
+                assert broker is not None
+                reader, writer = await asyncio.open_connection("127.0.0.1", broker.port)
+                try:
+                    raw = canonical({"kind": kind, "nonce": broker.nonce, "pid": os.getpid(), "stamp": stamp})
+                    writer.write(struct.pack("!I", len(raw)) + raw)
+                    await writer.drain()
+                    async with asyncio.timeout(20):
+                        head = await reader.readexactly(4)
+                        size = struct.unpack("!I", head)[0]
+                        require(0 < size <= 4096, "Broker acknowledgement exceeded its bound.")
+                        return await reader.readexactly(size)
+                finally:
+                    writer.close()
+                    await writer.wait_closed()
+
+            self.assertEqual(decode(await notify("tool")), {"ok": True})
+            owner_file = target / "tool-owner"
+            positive = read_bytes(owner_file)
+            self.assertIn(str(os.getpid()).encode(), positive)
+            assert state.identity is not None
+            async with state.lock("anthropic"):
+                state.identity.publish_sidecar("anthropic", token(), "active")
+            successor = await subscriptions.identity("anthropic")
+            self.assertNotEqual(successor["witness"], lifetime["witness"])
+            before = subject.image(subject.state)
+            with self.assertRaises(asyncio.IncompleteReadError):
+                await notify("shell")
+            self.assertEqual(subject.image(subject.state), before)
+            self.assertEqual(read_bytes(owner_file), positive)
+            self.assertFalse(os.path.lexists(target / "shell-calls"))
+            self.assertEqual(await subscriptions.identity("anthropic"), successor)
+            await broker.close()
+            broker = None
+            await runs.remove("broker-run", reservation)
+            self.assertEqual(await subscriptions.identity("anthropic"), successor)
+            subject.check()
+        finally:
+            try:
+                if broker is not None:
+                    await broker.close()
+            finally:
+                try:
+                    state.close()
+                finally:
+                    subject.close()
+
+    def test_matching_and_displaced_chat_session_completion(self) -> None:
+        asyncio.run(self._chat_session_completion())
+
+    async def _chat_session_completion(self) -> None:
+        subject = ClaudeLocalSubject()
+        state = State(subject.state)
+        try:
+            state.initialize(subject.fixture.admission)
+            subscriptions = Subscriptions(state, {}, [], subject.fixture.root.path / "vendor/settings.json")
+            proof = await subscriptions.identity("anthropic")
+            lifetime = {key: proof[key] for key in ("generation", "witness")}
+            chats = Chats(state)
+            local_home = subject.fixture.root.path / "vendor" / "chat-fixture"
+            project = local_home / "projects" / "local"
+            project.mkdir(parents=True, mode=0o700)
+            request: Object = {"subscriptionId": "anthropic", "chatSessionId": "local-chat",
+                               "workingDirectory": str(subject.fixture.root.path), "systemPrompt": ""}
+            fingerprint: Object = {"messages": 0, "digest": digest("")}
+            old_conversation, new_conversation = str(uuid.uuid4()), str(uuid.uuid4())
+            for conversation in (old_conversation, new_conversation):
+                (project / (conversation + ".jsonl")).write_bytes(b"{}\n")
+            old_plan: Object = {"identity": lifetime, "conversation": old_conversation}
+            await chats.settle(request, old_plan, fingerprint, True, local_home)
+            path = chats.path("anthropic", digest("local-chat"))
+            self.assertEqual(decode(read_bytes(path), exact=False)["conversation"], old_conversation)
+            assert state.identity is not None
+            async with state.lock("anthropic"):
+                state.identity.publish_sidecar("anthropic", token(), "active")
+            successor = await subscriptions.identity("anthropic")
+            replacement = {key: successor[key] for key in ("generation", "witness")}
+            self.assertNotEqual(replacement["witness"], lifetime["witness"])
+            await chats.settle(request, {"identity": replacement, "conversation": new_conversation},
+                               fingerprint, True, local_home)
+            before = read_bytes(path)
+            self.assertEqual(decode(before, exact=False)["conversation"], new_conversation)
+            await chats.settle(request, old_plan, fingerprint, True, local_home)
+            self.assertEqual(read_bytes(path), before)
+            self.assertEqual(await subscriptions.identity("anthropic"), successor)
+            subject.check()
+        finally:
+            try:
+                state.close()
+            finally:
+                subject.close()
+
     def test_matching_and_displaced_run_save(self) -> None:
         asyncio.run(self._conditional_run_save())
 
