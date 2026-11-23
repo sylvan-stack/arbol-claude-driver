@@ -196,6 +196,52 @@ class LocalIdentityTests(unittest.TestCase):
             with self.subTest(fault=fault):
                 asyncio.run(self._lost_or_corrupt_proof(fault))
 
+    def test_native_refusals_preserve_proof_and_native_state(self) -> None:
+        asyncio.run(self._native_refusals_and_local_retirement())
+
+    async def _native_refusals_and_local_retirement(self) -> None:
+        subject = ClaudeLocalSubject()
+        try:
+            original = self._proof(await subject.request("native-proof", "identity", "anthropic"), "anthropic")
+            baseline = subject.image(subject.state)
+            for operation in ("sign-out", "remove"):
+                for flags in ((), ("--force",)):
+                    with self.subTest(operation=operation, flags=flags):
+                        result = await subject.request(operation + ("-force" if flags else ""),
+                                                       operation, "anthropic", *flags)
+                        error = self._failure(result, "invalid_input")
+                        self.assertIn("Claude Code", error["message"])
+                        self.assertEqual(subject.image(subject.state), baseline)
+                        subject.check()
+            for alias in ("zai", "claude-zai"):
+                error = self._failure(await subject.request("alias-" + alias, "identity", alias), "invalid_input")
+                self.assertIn("Pi Driver", error["remedy"])
+                self.assertEqual(subject.image(subject.state), baseline)
+            expected = str(original["generation"]) + "." + str(original["witness"])
+            self.assertEqual(self._proof(await subject.request("native-after-refusals", "identity", "anthropic",
+                                                              "--expect", expected), "anthropic"), original)
+            created = await subject.request("local-create", "create", "--family", "anthropic", "--id",
+                                            "anthropic-2", "--label", "Local")
+            self.assertEqual((created.exit, created.stderr), (0, b""))
+            local = self._proof(await subject.request("local-proof", "identity", "anthropic-2"), "anthropic-2")
+            removed = await subject.request("local-remove", "remove", "anthropic-2")
+            self.assertEqual((removed.exit, removed.stderr), (0, b""))
+            sidecar = decode(read_bytes(subject.state / "subscriptions/anthropic-2/identity.json"))
+            self.assertEqual(sidecar, {"version": 1, "state": "retired", "witness": local["witness"]})
+            self._failure(await subject.request("local-removed-proof", "identity", "anthropic-2"), "not_found")
+            recreated = await subject.request("local-recreate", "create", "--family", "anthropic", "--id",
+                                              "anthropic-2", "--label", "Recreated")
+            self.assertEqual((recreated.exit, recreated.stderr), (0, b""))
+            successor = self._proof(await subject.request("local-successor", "identity", "anthropic-2"),
+                                    "anthropic-2")
+            self.assertEqual(successor["generation"], local["generation"])
+            self.assertNotEqual(successor["witness"], local["witness"])
+            self.assertEqual(self._proof(await subject.request("native-after-local", "identity", "anthropic",
+                                                              "--expect", expected), "anthropic"), original)
+            subject.check()
+        finally:
+            subject.close()
+
     async def _lost_or_corrupt_proof(self, fault: str) -> None:
         subject = ClaudeLocalSubject()
         try:
