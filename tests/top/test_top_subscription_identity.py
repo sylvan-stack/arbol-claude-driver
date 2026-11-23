@@ -15,7 +15,8 @@ from arbol_claude_driver.identity_protocol import (
     Object, canonical, decode, fields, inspect_process, read_bytes, sha256, token, valid_hash, valid_token,
 )
 from arbol_claude_driver.state import State
-from arbol_claude_driver.subscriptions import Subscriptions
+from arbol_claude_driver.core import Failure
+from arbol_claude_driver.subscriptions import Authentication, Subscriptions
 from identity_support import (
     ClaudeCapture, ClaudeInvocation, ClaudeLocalSubject, Directory, Fixture, H1Child, H1_ID,
     LocalResult, LocalResults, SuiteStreams, require,
@@ -313,6 +314,45 @@ class LocalIdentityTests(unittest.TestCase):
         self.assertEqual(set(result), {"error"})
         self.assertEqual(result["error"]["code"], code)
         return dict(result["error"])
+
+
+class LifetimeRaceTests(unittest.TestCase):
+    def test_matching_and_displaced_record_save(self) -> None:
+        asyncio.run(self._conditional_record_save())
+
+    async def _conditional_record_save(self) -> None:
+        subject = ClaudeLocalSubject()
+        state = State(subject.state)
+        try:
+            state.initialize(subject.fixture.admission)
+            subscriptions = Subscriptions(state, {}, [], subject.fixture.root.path / "vendor/settings.json")
+            proof = await subscriptions.identity("anthropic")
+            lifetime = {key: proof[key] for key in ("generation", "witness")}
+            auth = Authentication(subscriptions, {}, asyncio.Event())
+            await auth.save("anthropic", lambda record: {**record, "label": "Matching lifetime"}, lifetime=lifetime)
+            record_path = subject.state / "subscriptions/anthropic/record.json"
+            self.assertEqual(decode(read_bytes(record_path))["label"], "Matching lifetime")
+            assert state.identity is not None
+            async with state.lock("anthropic"):
+                successor_witness = token()
+                self.assertNotEqual(successor_witness, lifetime["witness"])
+                state.identity.publish_sidecar("anthropic", successor_witness, "active")
+            successor = await subscriptions.identity("anthropic")
+            self.assertEqual(successor["generation"], lifetime["generation"])
+            self.assertEqual(successor["witness"], successor_witness)
+            before = subject.image(subject.state)
+            with self.assertRaises(Failure) as failed:
+                await auth.save("anthropic", lambda record: {**record, "label": "Stale write"}, lifetime=lifetime)
+            self.assertEqual(failed.exception.result["code"], "in_use")
+            self.assertEqual(subject.image(subject.state), before)
+            self.assertEqual(decode(read_bytes(record_path))["label"], "Matching lifetime")
+            self.assertEqual(await subscriptions.identity("anthropic"), successor)
+            subject.check()
+        finally:
+            try:
+                state.close()
+            finally:
+                subject.close()
 
 
 @dataclass
