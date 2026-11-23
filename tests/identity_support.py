@@ -1755,8 +1755,6 @@ CLAUDE_UNIT_ORDER = (
     "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_inference_metadata_broker",
     H1_ID,
 )
-CLAUDE_PENDING_CASE_BODIES = ("run-and-chat-completion", "inference-metadata-broker",
-                              "five-window-create-publication")
 # These are pending duties, not a claim that concrete observers are wired.
 CLAUDE_PENDING_EXTERNAL = ("H1-span-completion", "terminal-close-closure",
                            "create-publication-recovery", "create-publication-absence")
@@ -1772,12 +1770,12 @@ class ClaudeWholeUnitPhase:
         self.streams: SuiteStreams | None = None
         self.results: LocalResults | None = None
         self.binding: object | None = None
+        self.create_helpers: list[TerminalHelperWitness] = []
         self.closed = False
 
     def __enter__(self) -> ClaudeWholeUnitPhase:
         require(not self.closed and self.fixture is None and current_admission() is self.admission,
                 "The entered checker Admission is required.")
-        require(not CLAUDE_PENDING_CASE_BODIES, "Required Claude whole-unit case bodies are not all authored.")
         context = _suite_current(self.admission)
         require(context["role"] == "helper" and context["entry"] == "scripts/check_build.py"
                 and sys.argv[1:] == ["unit"]
@@ -1846,6 +1844,38 @@ class ClaudeWholeUnitPhase:
         require(child.settled and child.reaped and child.endpoints_closed and child.child.returncode == 0,
                 "Actual H1 completion and reap are incomplete.")
         return child
+
+    def record_create_helper(self, child: H1Child, window: str, command: str) -> None:
+        """Retain the actual owner receipt before the local create fixture closes."""
+        require(not self.closed and current_admission() is self.admission and child.fixture.admission is self.admission,
+                "Create helper belongs to another checker.")
+        windows = ("C1-prepared-durable", "C2-record-durable", "C3-sidecar-durable",
+                   "C4-committed-durable", "C5-clear-durable")
+        schedule = tuple((name, mode) for name in windows for mode in ("continue", "abort-io"))
+        index = len(self.create_helpers)
+        require(index < len(schedule) and (window, command) == schedule[index],
+                "Create helper is missing, duplicated or out of order.")
+        args = child.child.args
+        require(isinstance(args, (list, tuple)) and list(args[:3]) == child.ticket.prefix
+                and list(args[3:7]) == ["create-stop", SELECTOR, window, child.fixture.case]
+                and len(args) == 8, "Create helper argv differs from its fixed actor route.")
+        expected_outcome = "completed" if command == "continue" else "injected-failure"
+        require(child.child.returncode == (0 if command == "continue" else 1)
+                and _document(bytes(child.output["stdout"])) == {"version": 1, "kind": "actor-result",
+                    "case": child.fixture.case, "action": "create-stop", "outcome": expected_outcome}
+                and not child.output["stderr"], "Create helper result or actual wait differs.")
+        witness = TerminalHelperWitness.from_h1(child)
+        witness.verify(self.admission, ACTOR)
+        self.create_helpers.append(witness)
+
+    def terminal_helpers(self) -> tuple[TerminalHelperWitness, ...]:
+        require(not self.closed and current_admission() is self.admission and len(self.create_helpers) == 10,
+                "The actual ten create helper completions are incomplete.")
+        from top.test_top_subscription_identity import H1CaseBinding
+        require(isinstance(self.binding, H1CaseBinding) and self.binding.child is not None,
+                "The actual H1 child is unavailable.")
+        assert isinstance(self.binding, H1CaseBinding) and self.binding.child is not None
+        return (*self.create_helpers, TerminalHelperWitness.from_h1(self.binding.child))
 
     def terminal_scope(self) -> TerminalCloseScope:
         from top.test_top_subscription_identity import H1CaseBinding
