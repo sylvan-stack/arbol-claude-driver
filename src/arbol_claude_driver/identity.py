@@ -139,13 +139,12 @@ class IdentityState:
 
     @classmethod
     def open(cls, directory: Path, *, qualified: bool) -> IdentityState:
-        # Qualified startup has already verified the component lease. Legacy
-        # format-one access uses this extra local guard but gains no proof.
-        # This preflight can only refuse unsupported state before mkdir/chmod/
-        # guard creation. It grants no authority: format is read again under
-        # the guard before any root identity or ordinary state access.
+        # Refuse legacy state before touching its directory. Recheck the
+        # marker under the guard before reading the root identity.
         preflight = state_format(directory)
-        if preflight != 1 and not qualified:
+        if preflight == 1:
+            raise Failure('invalid_input', 'Upgrade Driver state under exclusive maintenance before using this Build.')
+        if not qualified:
             raise Failure('internal', 'Identity state requires qualified normal admission.')
         ensure_directory(directory)
         guard = directory / 'identity.guard'
@@ -171,7 +170,7 @@ class IdentityState:
                 cls._lock(descriptor, exclusive=True)
                 number = state_format(directory)
                 if number is None:
-                    if not qualified or any(path.name != 'identity.guard' for path in directory.iterdir()):
+                    if any(path.name != 'identity.guard' for path in directory.iterdir()):
                         raise unsafe()
                     fresh_generation = token()
                     # Fence old writers before any proof publication. A crash
@@ -180,15 +179,9 @@ class IdentityState:
                     publish(directory / 'identity.json', {'version': 1, 'generation': fresh_generation})
                     number = 2
                 cls._lock(descriptor, exclusive=False)
-            if number == 2 and not qualified:
-                raise Failure('internal', 'Format-2 state requires qualified normal admission.')
-            if number == 1:
-                # Legacy initialize hardened this marker after validating its
-                # supported format; do the same without claiming a proof.
-                (directory / 'format').chmod(0o600)
-                sync_directory(directory)
-            generation = root_identity(directory) if number == 2 else None
-            result = cls(directory, descriptor, number, generation)
+            if number != 2:
+                raise unsafe()
+            result = cls(directory, descriptor, number, root_identity(directory))
             result.check()
             return result
         except BaseException:
