@@ -15,6 +15,7 @@ import subprocess
 import time
 import unittest
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import ClassVar
 
@@ -35,6 +36,20 @@ from identity_support import (
 
 
 class LocalIdentityTests(unittest.TestCase):
+    _create_witness: ClassVar[Callable[[H1Child, str, str], None] | None] = None
+
+    @classmethod
+    def bind_create_witness(cls, callback: Callable[[H1Child, str, str], None]) -> None:
+        require(cls._create_witness is None, "The fixed create witness callback is already bound.")
+        cls._create_witness = callback
+
+    @classmethod
+    def unbind_create_witness(cls, callback: Callable[[H1Child, str, str], None]) -> None:
+        require(cls._create_witness is None or cls._create_witness == callback,
+                "Another checker owns the create witness callback.")
+        if cls._create_witness == callback:
+            cls._create_witness = None
+
     def test_create_publication_five_real_fsync_windows(self) -> None:
         windows = ("C1-prepared-durable", "C2-record-durable", "C3-sidecar-durable",
                    "C4-committed-durable", "C5-clear-durable")
@@ -82,6 +97,11 @@ class LocalIdentityTests(unittest.TestCase):
             ticket.acknowledge(child.pid)
             self.assertTrue(ticket.completed)
             guard._verify_helper("active")
+            guard.ack_raw = canonical({"version": 1, "kind": "abr38-actual-helper-ack", "pid": child.pid,
+                "contextSha256": sha256(guard.helper_context_raw or b""),
+                "handoffSha256": sha256(read_bytes(admission.authority.folder / "handoffs" /
+                                                   (ticket.pending["handoff"] + ".json")))})
+            fixture.retain("helper-ack.json", guard.ack_raw)
             deadline = time.monotonic() + 10
             raw = bytearray()
             while b"\n" not in raw:
@@ -179,6 +199,10 @@ class LocalIdentityTests(unittest.TestCase):
             fixture.retain("create-actor-result.json", canonical(result))
             guard._close_endpoints()
             guard.settled = True
+            callback = LocalIdentityTests._create_witness
+            require(callback is not None, "The whole-unit create witness owner is not bound.")
+            assert callback is not None
+            callback(guard, window, command)
         except BaseException as error:
             original = error
             raise
