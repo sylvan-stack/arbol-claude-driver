@@ -1430,6 +1430,133 @@ class BrokerRegistrationCapture:
 
 
 @dataclass(frozen=True)
+class BrokerTerminalWitness:
+    registration: BrokerRegistration
+    terminal_raw: bytes
+    ack_raw: bytes
+    result_raw: bytes
+
+    @classmethod
+    async def close(cls, registration: BrokerRegistration) -> BrokerTerminalWitness:
+        """Observe the actual application reply and direct child wait inside packaged Broker.close."""
+        from arbol_claude_driver import metadata
+
+        broker, child = registration.broker, registration.child
+        ticket, admission = registration.ticket, registration.ticket.parent
+        require(current_admission() is admission and type(broker) is metadata.Broker and broker.child is child
+                and not broker.closed and broker.channel.fileno() >= 0 and child.returncode is None,
+                "The outstanding broker is not the registered direct child.")
+        channel = broker.channel
+        name = "src/arbol_claude_driver/metadata.py"
+        path = str(admission.payload.root / name)
+        module = compile(_payload_bytes(admission, name, limit=_DOCUMENT_LIMIT), path, "exec",
+                         dont_inherit=True, optimize=sys.flags.optimize)
+        classes = [item for item in module.co_consts if isinstance(item, CodeType) and item.co_name == "Broker"]
+        require(len(classes) == 1, "The sealed broker class is unavailable.")
+        close_code = metadata.Broker.close.__code__
+        receive_code = metadata._receive.__code__
+        for container, code in ((classes[0], close_code), (module, receive_code)):
+            matches = [item for item in container.co_consts if isinstance(item, CodeType) and item.co_name == code.co_name]
+            require(matches == [code] and code.co_filename == path, "The broker close or receive source changed.")
+        wait_code = asyncio.subprocess.Process.wait.__code__
+        previous = sys.getprofile()
+        received = waited = 0
+        reply_digest: str | None = None
+
+        def observe(frame: FrameType, event: str, value: Any) -> None:
+            nonlocal received, waited, reply_digest
+            if previous is not None:
+                previous(frame, event, value)
+            if event != "return" or frame.f_code not in (receive_code, wait_code):
+                return
+            caller = frame.f_back
+            if caller is None or caller.f_code is not close_code or caller.f_locals.get("self") is not broker:
+                return
+            if frame.f_code is receive_code and frame.f_locals.get("channel") is channel and value == {"type": "closed"}:
+                received += 1
+                reply_digest = sha256(canonical(value))
+            elif frame.f_code is wait_code and frame.f_locals.get("self") is child and type(value) is int and value == 0:
+                if received == 1:
+                    waited += 1
+
+        sys.setprofile(observe)
+        try:
+            await broker.close()
+        finally:
+            sys.setprofile(previous)
+        require(received == waited == 1 and reply_digest is not None and broker.closed and child.returncode == 0
+                and broker.channel is channel and channel.fileno() == -1
+                and child.stdin is None and child.stdout is None and child.stderr is None,
+                "The actual broker close reply, wait or channel/DEVNULL closure is unavailable.")
+        raw_context = read_bytes(ticket.context_path)
+        require(sha256(raw_context) == registration.context_sha256, "The original registered broker context changed.")
+        private_context = _document(raw_context)
+        normal_context(private_context)
+        authority = admission.authority.folder
+        terminal_raw = read_bytes(authority / "writers" / private_context["invocation"] /
+                                  (private_context["writer"] + ".json"))
+        ack_raw = canonical({"version": 1, "kind": "abr38-broker-registration", "pid": child.pid,
+            "contextSha256": registration.context_sha256, "handoffSha256": registration.handoff_sha256,
+            "joinedReturn": "none"})
+        result_raw = canonical({"version": 1, "kind": "abr38-broker-close", "pid": child.pid,
+            "closedReplySha256": reply_digest, "waitStatus": child.returncode, "applicationChannel": "closed",
+            "streams": "devnull"})
+        return cls(registration, terminal_raw, ack_raw, result_raw)
+
+    @staticmethod
+    async def cleanup(broker: Any, registration: BrokerRegistration | None) -> None:
+        """Finish a failed local case without replaying an already closed application's socket."""
+        failures: list[BaseException] = []
+        if not broker.closed and broker.channel.fileno() >= 0:
+            try:
+                await broker.close()
+            except BaseException as failure:
+                failures.append(failure)
+        try:
+            async with asyncio.timeout(20):
+                await broker.child.wait()
+            require(broker.child.returncode is not None and broker.channel.fileno() == -1,
+                    "The failed broker's child wait or application channel is unresolved.")
+            if registration is not None:
+                require(registration.child is broker.child and registration.broker is broker,
+                        "Failed broker cleanup changed its original direct child.")
+                current = inspect_process(broker.child.pid)
+                require(current is None or current.owner != registration.owner,
+                        "The failed broker's original direct child is still alive.")
+        except BaseException as failure:
+            failures.append(failure)
+        if failures:
+            raise BaseExceptionGroup("Broker cleanup or child custody is unresolved.", failures)
+
+    def verify(self, admission: Admission, entry: str) -> Object:
+        reg = self.registration
+        ticket, child = reg.ticket, reg.child
+        require(entry == "bin/metadata-helper.py" and entry in admission.payload.descriptor["helpers"]
+                and ticket.parent is admission and ticket.completed and reg.handshake.done()
+                and not reg.handshake.cancelled() and reg.handshake.result() is None
+                and reg.broker.child is child and reg.broker.closed and reg.broker.channel.fileno() == -1
+                and child.returncode == 0 and ticket.child_socket.fileno() == ticket.frames.socket.fileno() == -1,
+                "The original asynchronous broker or its registration did not finish.")
+        live = inspect_process(child.pid)
+        require(live is None or live.owner != reg.owner, "The original broker process is still alive.")
+        authority = admission.authority.folder
+        raw = read_bytes(ticket.context_path)
+        require(sha256(raw) == reg.context_sha256, "The broker's original private context changed.")
+        context = _document(raw)
+        normal_context(context)
+        transfer = read_bytes(authority / "handoffs" / (context["handoff"] + ".json"))
+        terminal = read_bytes(authority / "writers" / context["invocation"] / (context["writer"] + ".json"))
+        require(sha256(transfer) == reg.handoff_sha256 and context["process"] == reg.owner
+                and terminal == self.terminal_raw and
+                _document(terminal) == _expected_writer(context, reg.context_sha256, "terminal"),
+                "Broker accepted handoff or terminal writer changed.")
+        return {"invocation": context["invocation"], "writer": context["writer"], "handoff": context["handoff"],
+                "contextSha256": reg.context_sha256, **reg.owner, "waitStatus": child.returncode,
+                "resultSha256": sha256(self.result_raw), "terminalRecordSha256": sha256(terminal),
+                "ackEvidenceSha256": sha256(self.ack_raw)}
+
+
+@dataclass(frozen=True)
 class TerminalHelperWitness:
     """Actual direct-owner objects and retained bytes, never a success flag.
 
@@ -1590,7 +1717,7 @@ class TerminalCloseScope:
                 "Actual Admission.finish is not the exact packaged source.")
         return Admission.finish.__code__
 
-    def _graph(self, witnesses: tuple[TerminalHelperWitness, ...], entries: tuple[str, ...]) -> list[Object]:
+    def _graph(self, witnesses: tuple[TerminalHelperWitness | BrokerTerminalWitness, ...], entries: tuple[str, ...]) -> list[Object]:
         require(0 < len(witnesses) <= 4096 and len(witnesses) == len(entries), "Pinned full helper schedule differs.")
         admission, suite = self.admission, self.admission.context
         with admission.authority.mutex():
@@ -1633,7 +1760,7 @@ class TerminalCloseScope:
                     "A nested/async or unlisted helper lacks its complete actual-owner receipt.")
         return helper_rows
 
-    def arm(self, completed_rows: tuple[LocalResult, ...], witnesses: tuple[TerminalHelperWitness, ...], *,
+    def arm(self, completed_rows: tuple[LocalResult, ...], witnesses: tuple[TerminalHelperWitness | BrokerTerminalWitness, ...], *,
             expected_entries: tuple[str, ...], tuple_pins_raw: bytes, tuple_pins_sha256: str) -> None:
         require(self.entered and not self.armed and not self.finish_may_have_begun
                 and not self.streams.closed and self.streams.exchanged,
@@ -1701,7 +1828,7 @@ class TerminalCloseScope:
                 "Original provisional H1 report/readiness changed.")
         require(len(completed_rows) == len(self.results.order), "Full completed local result schedule is incomplete.")
         helpers = self._graph(witnesses, expected_entries)
-        require(sum(witness.child is self.h1.child for witness in witnesses) == 1,
+        require(sum(isinstance(witness, TerminalHelperWitness) and witness.child is self.h1.child for witness in witnesses) == 1,
                 "The one actual positive H1 helper is missing or duplicated.")
         rows: list[Object] = []
         evidence_directory = self.fixture.directories[-1]
@@ -1723,7 +1850,9 @@ class TerminalCloseScope:
             self.fixture.retain(f"terminal-local-{index:04d}.result", raw, limit=65536)
             rows.append({"id": expected_id, "resultSha256": sha256(raw)})
         for index, witness in enumerate(witnesses):
-            for suffix, raw in (("context", witness.context_raw), ("terminal", witness.terminal_raw),
+            if isinstance(witness, TerminalHelperWitness):
+                self.fixture.retain(f"terminal-helper-{index:04d}.context", witness.context_raw, limit=4096)
+            for suffix, raw in (("terminal", witness.terminal_raw),
                                 ("result", witness.result_raw), ("ack", witness.ack_raw)):
                 self.fixture.retain(f"terminal-helper-{index:04d}.{suffix}", raw, limit=65536 if suffix == "result" else 4096)
         settled = {"version": 1, "kind": "abr38-terminal-close-settled", "component": COMPONENT,
@@ -1908,8 +2037,8 @@ CLAUDE_PENDING_EXTERNAL = ("H1-span-completion", "terminal-close-closure",
                            "create-publication-recovery", "create-publication-absence")
 CLAUDE_CREATE_WINDOWS = ("C1-prepared-durable", "C2-record-durable", "C3-sidecar-durable",
                          "C4-committed-durable", "C5-clear-durable")
-CLAUDE_HELPER_ENTRIES = (ACTOR,) * 11
-CLAUDE_HELPER_STATUSES = (0, 1) * 5 + (0,)
+CLAUDE_HELPER_ENTRIES = (ACTOR,) * 10 + ("bin/metadata-helper.py", ACTOR)
+CLAUDE_HELPER_STATUSES = (0, 1) * 5 + (0, 0)
 
 
 class ClaudeWholeUnitPhase:
@@ -1923,6 +2052,7 @@ class ClaudeWholeUnitPhase:
         self.results: LocalResults | None = None
         self.binding: object | None = None
         self.create_helpers: list[TerminalHelperWitness] = []
+        self.broker_witness: BrokerTerminalWitness | None = None
         self.closed = False
 
     def __enter__(self) -> ClaudeWholeUnitPhase:
@@ -1939,10 +2069,12 @@ class ClaudeWholeUnitPhase:
             self.fixture = Fixture.create(self.admission, self.case)
             self.results = LocalResults(self.fixture, CLAUDE_UNIT_ORDER, CLAUDE_PENDING_EXTERNAL)
             self.streams = SuiteStreams.separate(self.fixture)
-            from top.test_top_subscription_identity import H1CaseBinding, HelperSpanTests, LocalIdentityTests
+            from top.test_top_subscription_identity import H1CaseBinding, HelperSpanTests, LifetimeRaceTests, LocalIdentityTests
             self.binding = H1CaseBinding(self.fixture, self.results, self.streams)
             HelperSpanTests.bind(self.binding)
             LocalIdentityTests.bind_create_witness(self.record_create_helper)
+            require(LifetimeRaceTests.broker_result is None, "A different case owns the broker observation.")
+            LifetimeRaceTests.broker_result = self.record_broker
             require(current_admission() is self.admission, "Checker Admission changed during setup.")
             return self
         except BaseException as original:
@@ -1953,7 +2085,9 @@ class ClaudeWholeUnitPhase:
         self.closed = True
         failures: list[BaseException] = []
         try:
-            from top.test_top_subscription_identity import LocalIdentityTests
+            from top.test_top_subscription_identity import LifetimeRaceTests, LocalIdentityTests
+            if LifetimeRaceTests.broker_result == self.record_broker:
+                LifetimeRaceTests.broker_result = None
             LocalIdentityTests.unbind_create_witness(self.record_create_helper)
         except BaseException as error:
             failures.append(error)
@@ -2024,14 +2158,22 @@ class ClaudeWholeUnitPhase:
         witness.verify(self.admission, ACTOR)
         self.create_helpers.append(witness)
 
-    def terminal_helpers(self) -> tuple[TerminalHelperWitness, ...]:
+    def record_broker(self, witness: BrokerTerminalWitness) -> None:
+        require(not self.closed and len(self.create_helpers) == 10 and self.broker_witness is None
+                and current_admission() is self.admission, "Broker evidence is missing, repeated or out of order.")
+        witness.verify(self.admission, "bin/metadata-helper.py")
+        self.broker_witness = witness
+
+    def terminal_helpers(self) -> tuple[TerminalHelperWitness | BrokerTerminalWitness, ...]:
         require(not self.closed and current_admission() is self.admission and len(self.create_helpers) == 10,
                 "The actual ten create helper completions are incomplete.")
         from top.test_top_subscription_identity import H1CaseBinding
         require(isinstance(self.binding, H1CaseBinding) and self.binding.child is not None,
                 "The actual H1 child is unavailable.")
         assert isinstance(self.binding, H1CaseBinding) and self.binding.child is not None
-        return (*self.create_helpers, TerminalHelperWitness.from_h1(self.binding.child))
+        if self.broker_witness is None:
+            raise SpanFailure("Original registered broker observation is unavailable.")
+        return (*self.create_helpers, self.broker_witness, TerminalHelperWitness.from_h1(self.binding.child))
 
     def terminal_scope(self) -> TerminalCloseScope:
         from top.test_top_subscription_identity import H1CaseBinding

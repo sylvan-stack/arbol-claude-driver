@@ -12,6 +12,7 @@ import socket
 import stat
 import struct
 import subprocess
+import sys
 import time
 import unittest
 import uuid
@@ -22,7 +23,7 @@ from typing import ClassVar
 from arbol_claude_driver.identity_protocol import (
     Object, canonical, decode, fields, inspect_process, read_bytes, sha256, token, valid_hash, valid_token,
 )
-from arbol_claude_driver.admission import current_admission
+from arbol_claude_driver.admission import _join_owned, current_admission
 from arbol_claude_driver.continuity import Chats, Runs
 from arbol_claude_driver.state import State
 from arbol_claude_driver.core import Failure
@@ -30,7 +31,8 @@ from arbol_claude_driver.history import digest
 from arbol_claude_driver.metadata import Broker
 from arbol_claude_driver.subscriptions import Authentication, Subscriptions
 from identity_support import (
-    ClaudeCapture, ClaudeInvocation, ClaudeLocalSubject, Directory, Fixture, H1Child, H1_ID,
+    BrokerRegistration, BrokerRegistrationCapture, BrokerTerminalWitness, ClaudeCapture, ClaudeInvocation, ClaudeLocalSubject,
+    Directory, Fixture, H1Child, H1_ID,
     LocalResult, LocalResults, SuiteStreams, require,
 )
 
@@ -534,6 +536,8 @@ class LocalIdentityTests(unittest.TestCase):
 
 
 class LifetimeRaceTests(unittest.TestCase):
+    broker_result: ClassVar[Callable[[BrokerTerminalWitness], None] | None] = None
+
     def test_matching_and_displaced_inference_metadata_broker(self) -> None:
         asyncio.run(self._inference_metadata_broker())
 
@@ -541,6 +545,7 @@ class LifetimeRaceTests(unittest.TestCase):
         subject = ClaudeLocalSubject()
         state = State(subject.state)
         broker: Broker | None = None
+        registration: BrokerRegistration | None = None
         try:
             state.initialize(subject.fixture.admission)
             subscriptions = Subscriptions(state, {}, [], subject.fixture.root.path / "vendor/settings.json")
@@ -551,7 +556,11 @@ class LifetimeRaceTests(unittest.TestCase):
                                              "broker-conversation", lifetime=lifetime)
             target = state.directory / "tmp" / "broker-run"
             target.mkdir(parents=True, mode=0o700)
-            broker = await Broker.start(state, "anthropic", reservation)
+            with BrokerRegistrationCapture(subject.fixture.admission) as capture:
+                broker = await Broker.start(state, "anthropic", reservation)
+            registration = capture.registration
+            require(registration is not None and registration.broker is broker, "The original broker registration is missing.")
+            assert registration is not None
             stamp = " ".join(subprocess.check_output(
                 ["/bin/ps", "-p", str(os.getpid()), "-o", "lstart="],
                 env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "TZ": "UTC"}, timeout=5,
@@ -589,20 +598,33 @@ class LifetimeRaceTests(unittest.TestCase):
             self.assertEqual(read_bytes(owner_file), positive)
             self.assertFalse(os.path.lexists(target / "shell-calls"))
             self.assertEqual(await subscriptions.identity("anthropic"), successor)
-            await broker.close()
+            witness = await BrokerTerminalWitness.close(registration)
             broker = None
+            callback = LifetimeRaceTests.broker_result
+            require(callback is not None, "The actual whole-unit broker collector is missing.")
+            assert callback is not None
+            callback(witness)
             await runs.remove("broker-run", reservation)
             self.assertEqual(await subscriptions.identity("anthropic"), successor)
             subject.check()
         finally:
-            try:
-                if broker is not None:
-                    await broker.close()
-            finally:
+            original = sys.exception()
+            failures: list[BaseException] = []
+            if broker is not None:
                 try:
-                    state.close()
-                finally:
-                    subject.close()
+                    await _join_owned(asyncio.create_task(BrokerTerminalWitness.cleanup(broker, registration)))
+                except BaseException as failure:
+                    failures.append(failure)
+            for close in (state.close, subject.close):
+                try:
+                    close()
+                except BaseException as failure:
+                    failures.append(failure)
+            if failures:
+                if original is None:
+                    raise BaseExceptionGroup("The broker case did not settle.", failures)
+                for cleanup_error in failures:
+                    original.add_note("Additional broker case cleanup failure: " + type(cleanup_error).__name__)
 
     def test_matching_and_displaced_chat_session_completion(self) -> None:
         asyncio.run(self._chat_session_completion())
