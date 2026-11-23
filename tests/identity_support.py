@@ -1758,6 +1758,10 @@ CLAUDE_UNIT_ORDER = (
 # These are pending duties, not a claim that concrete observers are wired.
 CLAUDE_PENDING_EXTERNAL = ("H1-span-completion", "terminal-close-closure",
                            "create-publication-recovery", "create-publication-absence")
+CLAUDE_CREATE_WINDOWS = ("C1-prepared-durable", "C2-record-durable", "C3-sidecar-durable",
+                         "C4-committed-durable", "C5-clear-durable")
+CLAUDE_HELPER_ENTRIES = (ACTOR,) * 11
+CLAUDE_HELPER_STATUSES = (0, 1) * 5 + (0,)
 
 
 class ClaudeWholeUnitPhase:
@@ -1787,9 +1791,10 @@ class ClaudeWholeUnitPhase:
             self.fixture = Fixture.create(self.admission, self.case)
             self.results = LocalResults(self.fixture, CLAUDE_UNIT_ORDER, CLAUDE_PENDING_EXTERNAL)
             self.streams = SuiteStreams.separate(self.fixture)
-            from top.test_top_subscription_identity import H1CaseBinding, HelperSpanTests
+            from top.test_top_subscription_identity import H1CaseBinding, HelperSpanTests, LocalIdentityTests
             self.binding = H1CaseBinding(self.fixture, self.results, self.streams)
             HelperSpanTests.bind(self.binding)
+            LocalIdentityTests.bind_create_witness(self.record_create_helper)
             require(current_admission() is self.admission, "Checker Admission changed during setup.")
             return self
         except BaseException as original:
@@ -1799,6 +1804,11 @@ class ClaudeWholeUnitPhase:
     def _cleanup(self, original: BaseException | None) -> None:
         self.closed = True
         failures: list[BaseException] = []
+        try:
+            from top.test_top_subscription_identity import LocalIdentityTests
+            LocalIdentityTests.unbind_create_witness(self.record_create_helper)
+        except BaseException as error:
+            failures.append(error)
         if self.binding is not None:
             from top.test_top_subscription_identity import H1CaseBinding, HelperSpanTests
             assert isinstance(self.binding, H1CaseBinding)
@@ -1849,9 +1859,7 @@ class ClaudeWholeUnitPhase:
         """Retain the actual owner receipt before the local create fixture closes."""
         require(not self.closed and current_admission() is self.admission and child.fixture.admission is self.admission,
                 "Create helper belongs to another checker.")
-        windows = ("C1-prepared-durable", "C2-record-durable", "C3-sidecar-durable",
-                   "C4-committed-durable", "C5-clear-durable")
-        schedule = tuple((name, mode) for name in windows for mode in ("continue", "abort-io"))
+        schedule = tuple((name, mode) for name in CLAUDE_CREATE_WINDOWS for mode in ("continue", "abort-io"))
         index = len(self.create_helpers)
         require(index < len(schedule) and (window, command) == schedule[index],
                 "Create helper is missing, duplicated or out of order.")
