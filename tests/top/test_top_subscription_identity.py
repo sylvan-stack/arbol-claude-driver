@@ -243,6 +243,69 @@ class LocalIdentityTests(unittest.TestCase):
         finally:
             subject.close()
 
+    def test_duplicate_local_create_refuses_without_changing_proof(self) -> None:
+        asyncio.run(self._duplicate_local_create())
+
+    async def _duplicate_local_create(self) -> None:
+        subject = ClaudeLocalSubject()
+        try:
+            arguments = ("--family", "anthropic", "--id", "anthropic-2", "--label", "Local")
+            created = await subject.request("duplicate-before", "create", *arguments)
+            self.assertEqual((created.exit, created.stderr), (0, b""))
+            proof = self._proof(await subject.request("duplicate-proof", "identity", "anthropic-2"), "anthropic-2")
+            before = subject.image(subject.state)
+            self._failure(await subject.request("duplicate-refusal", "create", *arguments), "in_use")
+            self.assertEqual(subject.image(subject.state), before)
+            self.assertEqual(self._proof(await subject.request("duplicate-proof-after", "identity", "anthropic-2"),
+                                         "anthropic-2"), proof)
+            subject.check()
+        finally:
+            subject.close()
+
+    def test_historical_prepared_create_settles_only_its_recorded_witness(self) -> None:
+        for present in (False, True):
+            with self.subTest(present=present):
+                asyncio.run(self._historical_create_settlement(present))
+
+    async def _historical_create_settlement(self, present: bool) -> None:
+        subject = ClaudeLocalSubject()
+        state = State(subject.state)
+        try:
+            state.initialize(subject.fixture.admission)
+            subscriptions = Subscriptions(state, {}, [], subject.fixture.root.path / "vendor/settings.json")
+            identifier = "anthropic-2"
+            witness = token()
+            async with state.lock(identifier):
+                folder = state.subscription(identifier)
+                if present:
+                    directory = Directory.root(folder)
+                    try:
+                        directory.exclusive("record.json", canonical({
+                            "id": identifier, "family": "anthropic", "label": "Historical local",
+                            "auth": "vendor_login", "state": "signed_out", "createdAt": "2026-01-01T00:00:00Z",
+                            "updatedAt": "2026-01-01T00:00:00Z",
+                        }))
+                    finally:
+                        directory.close()
+                assert state.identity is not None
+                state.identity.journal(identifier, "create", witness)
+                await subscriptions.settle_local(identifier)
+                self.assertIsNone(state.identity.read_pending(identifier))
+                self.assertEqual(state.identity.read_sidecar(identifier), {
+                    "version": 1, "witness": witness, "state": "active" if present else "retired",
+                })
+            if present:
+                captured = await subscriptions.identity(identifier)
+                self.assertEqual(captured["witness"], witness)
+            else:
+                self.assertFalse(os.path.lexists(folder / "record.json"))
+            subject.check()
+        finally:
+            try:
+                state.close()
+            finally:
+                subject.close()
+
     async def _lost_or_corrupt_proof(self, fault: str) -> None:
         subject = ClaudeLocalSubject()
         try:
