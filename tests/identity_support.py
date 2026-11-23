@@ -1738,8 +1738,8 @@ class TerminalCloseScope:
             # finalizer or outer context gets a post-finish diagnostic chance.
             os._exit(status)
 
-# Prospective full unit order. The future inventory must contain every entry;
-# names for the still-unwritten bodies are pinned here for their source owners.
+# Authored unit identities only. Missing case bodies explicitly prevent entry;
+# their names join this fixed schedule only after the bodies exist.
 CLAUDE_UNIT_ORDER = (
     "tests/top/test_top_runtime.py::StateTests.test_recovery_never_deletes_or_overwrites_a_newer_run",
     "tests/top/test_top_runtime.py::TransportTests.test_output_backpressure_uses_one_absolute_stop_deadline",
@@ -1748,12 +1748,13 @@ CLAUDE_UNIT_ORDER = (
     "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_interrupted_conversion_refuses_list_and_proof_without_recovering",
     "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_native_refusals_preserve_proof_and_native_state",
     "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_lost_or_corrupt_proof_refuses_without_regeneration",
-    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_create_publication_preserves_journal_obligations",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_duplicate_local_create_refuses_without_changing_proof",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_historical_prepared_create_settles_only_its_recorded_witness",
     "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_record_save",
-    "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_run_and_chat_completion",
-    "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_metadata_broker",
     H1_ID,
 )
+CLAUDE_PENDING_CASE_BODIES = ("run-and-chat-completion", "inference-metadata-broker",
+                              "five-window-create-publication")
 # These are pending duties, not a claim that concrete observers are wired.
 CLAUDE_PENDING_EXTERNAL = ("H1-span-completion", "terminal-close-closure",
                            "create-publication-recovery", "create-publication-absence")
@@ -1774,6 +1775,7 @@ class ClaudeWholeUnitPhase:
     def __enter__(self) -> ClaudeWholeUnitPhase:
         require(not self.closed and self.fixture is None and current_admission() is self.admission,
                 "The entered checker Admission is required.")
+        require(not CLAUDE_PENDING_CASE_BODIES, "Required Claude whole-unit case bodies are not all authored.")
         context = _suite_current(self.admission)
         require(context["role"] == "helper" and context["entry"] == "scripts/check_build.py"
                 and sys.argv[1:] == ["unit"]
