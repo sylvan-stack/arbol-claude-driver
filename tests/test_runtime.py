@@ -20,6 +20,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from arbol_claude_driver.continuity import Chats, Runs  # noqa: E402, F401
+from arbol_claude_driver.admission import current_admission  # noqa: E402
 from arbol_claude_driver.core import Failure, Record, clean_environment, compact, loads, now, number, parse_arguments, read_settings, safe_failure, utf8  # noqa: E402, F401
 from arbol_claude_driver.history import MessageDigest, digest, encode_folder, result_text, session_lines  # noqa: E402, F401
 from arbol_claude_driver.dev import live_check  # noqa: E402, F401
@@ -80,12 +81,11 @@ class ProcessGroupTests(unittest.TestCase):
 class StateTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.state = State(str(self.root / 'state'))
-        self.state.initialize()
-
-    async def asyncTearDown(self) -> None:
-        self.temporary.cleanup()
+        self.addCleanup(self.state.close)
+        self.state.initialize(current_admission())
 
 
 class TransportTests(unittest.IsolatedAsyncioTestCase):
