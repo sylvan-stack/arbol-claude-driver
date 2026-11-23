@@ -146,8 +146,10 @@ class LocalIdentityTests(unittest.TestCase):
                 self.assertTrue(valid_token(witness))
                 if sidecar is not None:
                     self.assertEqual(sidecar, {"version": 1, "state": "active", "witness": witness})
+                physical = _create_physical(fixture, opened[0])
                 fixture.retain("create-checkpoint.json", canonical({"version": 1, "window": window,
-                               "command": command, "journal": journal, "record": record, "sidecar": sidecar}))
+                               "command": command, "journal": journal, "record": record, "sidecar": sidecar,
+                               "physical": physical}))
             finally:
                 for directory in reversed(opened):
                     directory.close()
@@ -184,6 +186,7 @@ class LocalIdentityTests(unittest.TestCase):
                 final_journal = after_optional("identity-pending.json")
                 final_record = after_optional("record.json")
                 final_sidecar = after_optional("identity.json")
+                self.assertEqual(_create_physical(fixture, after_dirs[0]), physical)
                 if command == "abort-io":
                     self.assertEqual((final_journal, final_record, final_sidecar), (journal, record, sidecar))
                 else:
@@ -192,7 +195,7 @@ class LocalIdentityTests(unittest.TestCase):
                     self.assertEqual(final_sidecar, {"version": 1, "state": "active", "witness": witness})
                 fixture.retain("create-settlement.json", canonical({"version": 1, "window": window,
                                "command": command, "journal": final_journal, "record": final_record,
-                               "sidecar": final_sidecar}))
+                               "sidecar": final_sidecar, "physical": physical}))
             finally:
                 for directory in reversed(after_dirs):
                     directory.close()
@@ -738,6 +741,27 @@ class H1CaseBinding:
     streams: SuiteStreams
     child: H1Child | None = None
     provisional_result: LocalResult | None = None
+
+
+def _create_physical(fixture: Fixture, state: Directory) -> Object:
+    fixture.verify()
+    state.verify()
+    descriptor = os.open("identity.guard", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                         dir_fd=state.descriptor)
+    try:
+        held = os.fstat(descriptor)
+        named = os.stat("identity.guard", dir_fd=state.descriptor, follow_symlinks=False)
+        require(stat.S_ISREG(held.st_mode) and held.st_uid == os.getuid() and held.st_nlink == 1
+                and stat.S_IMODE(held.st_mode) == 0o600
+                and (held.st_dev, held.st_ino) == (named.st_dev, named.st_ino),
+                "Original create guard is not the verified physical file.")
+        fixture.verify()
+        state.verify()
+        return {"case": {"device": fixture.root.identity[0], "inode": fixture.root.identity[1]},
+                "state": {"device": state.identity[0], "inode": state.identity[1]},
+                "guard": {"device": held.st_dev, "inode": held.st_ino}}
+    finally:
+        os.close(descriptor)
 
 
 def _existing(parent: Directory, name: str) -> Directory:
