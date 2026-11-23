@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import os
 import platform
-import pwd
 import re
 import socket
 import stat
@@ -18,13 +17,12 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .paths import installation_root
-
 from .identity_protocol import (
     BUILD, COMPONENTS, DESCRIPTOR, LIMIT, Authority, Object, Payload, canonical,
-    canonical_uuid, decode, fields, identity_record, load_payload, physical, private_directory, process_identity,
+    canonical_uuid, decode, fields, identity_record, installed_registry, load_payload, physical, private_directory,
+    process_identity, registered_payload_root,
     publish, read, read_bytes, refuse, relative, sha256,
-    token, valid_hash, valid_token, validate,
+    token, valid_hash, valid_token, validate, verify_installed_registration,
 )
 
 COMPONENT = 'arbol-claude-driver'
@@ -138,9 +136,9 @@ def verify_acceptance(authority: Authority, payload: Payload, acceptance_digest:
             refuse()
     if acceptance['platform'] != {'system': 'Darwin', 'release': platform.release(), 'machine': platform.machine()} or platform.system() != 'Darwin':
         refuse()
-    installed = installation_root(pwd.getpwuid(os.getuid()).pw_dir) / 'builds'
-    if acceptance['status'] == 'candidate' and authority.registry == installed:
+    if acceptance['status'] == 'candidate' and authority.registry == installed_registry():
         refuse()
+    registration = verify_installed_registration(authority.registry, payload)
     gate_raw = read_bytes(authority.shared / 'gate.json')
     gate = decode(gate_raw)
     fields(gate, 'version kind providerPayloadSha256 components')
@@ -176,13 +174,14 @@ def verify_acceptance(authority: Authority, payload: Payload, acceptance_digest:
     for build_folder in candidates:
         if BUILD.fullmatch(build_folder.name) is None:
             continue
-        root = build_folder / 'driver-payload'
-        if not (root / DESCRIPTOR).exists():
+        root = registered_payload_root(authority.registry, 'arbol', build_folder.name)
+        descriptor = root / DESCRIPTOR
+        if not os.path.lexists(descriptor):
             continue
-        descriptor_raw = read_bytes(root / DESCRIPTOR)
+        descriptor_raw = read_bytes(descriptor)
         if sha256(descriptor_raw) == gate['providerPayloadSha256']:
             provider = load_payload(root, 'arbol', build_folder.name)
-            if provider.root != authority.registry / 'arbol' / provider.build / 'driver-payload':
+            if verify_installed_registration(authority.registry, provider) != registration:
                 refuse()
             matched += 1
     if matched != 1:
@@ -308,7 +307,7 @@ class Admission:
             if (not context_file.is_relative_to(authority.folder)
                     or digest != offer['contextSha256'] or context['payloadSha256'] != payload.digest
                     or context['entry'] != entry or payload.component != COMPONENT
-                    or payload.root != authority.registry / COMPONENT / payload.build / 'driver-payload'
+                    or payload.root != registered_payload_root(authority.registry, COMPONENT, payload.build)
                     or (context['role'] == 'main' and entry != payload.descriptor['entry'])
                     or (context['role'] == 'helper' and entry not in payload.descriptor['helpers'])):
                 refuse()

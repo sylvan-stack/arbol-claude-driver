@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
+from pwd import getpwuid
 from typing import Any, NoReturn
 
 Object = dict[str, Any]
@@ -752,3 +753,74 @@ def load_payload(root: Path, component: str, build: str) -> Payload:
         refuse()
     return Payload(root, descriptor, sha256(descriptor_raw))
 
+
+
+
+def installed_registry() -> Path:
+    return Path(getpwuid(os.getuid()).pw_dir) / "Builds/registries/arbol"
+
+
+def registered_payload_root(registry: Path, component: str, build: str) -> Path:
+    if component not in (*COMPONENTS, "arbol") or BUILD.fullmatch(build) is None:
+        refuse()
+    if registry == installed_registry():
+        registry = Path(getpwuid(os.getuid()).pw_dir) / ".local/lib/sylvan-stack/arbol/stable"
+    return registry / component / build / SUBTREE
+
+
+def verify_installed_registration(registry: Path, payload: Payload) -> str | None:
+    """Bind an installed payload to the committed five-package registration."""
+    if payload.root != registered_payload_root(registry, payload.component, payload.build):
+        refuse()
+    if registry != installed_registry():
+        return None
+
+    folder = private_directory(registry / payload.component / payload.build)
+    if os.path.lexists(folder / "build.json"):
+        refuse()
+    wrapper = read(folder / "driver-registration.json", limit=MANIFEST_LIMIT)
+    fields(wrapper, "version kind registrationSha256 record")
+    digest, record = wrapper["registrationSha256"], wrapper["record"]
+    if (wrapper["kind"] != "driver-registered-build" or not isinstance(digest, str)
+            or not valid_hash(digest) or not isinstance(record, dict)):
+        refuse()
+
+    history = private_directory(registry / ".driver-qualification" / "registrations")
+    raw = read_bytes(history / (digest + ".json"), limit=MANIFEST_LIMIT)
+    group = decode(raw, limit=MANIFEST_LIMIT)
+    fields(group, "version kind scope builds")
+    expected = ("arbol", *COMPONENTS)
+    builds = group["builds"]
+    if (sha256(raw) != digest or group["kind"] != "driver-build-registration"
+            or group["scope"] != str(registry) or not isinstance(builds, list) or len(builds) != len(expected)):
+        refuse()
+
+    selected = None
+    row_fields = set("component build source manifestSha256 descriptorSha256 recordSha256 entry entrySha256 entryMode candidate".split())
+    for name, row in zip(expected, builds, strict=True):
+        if (not isinstance(row, dict) or set(row) != row_fields or row["component"] != name
+                or not isinstance(row["build"], str) or BUILD.fullmatch(row["build"]) is None
+                or any(not valid_hash(row[key]) for key in (
+                    "manifestSha256", "descriptorSha256", "recordSha256", "entrySha256"))):
+            refuse()
+        if name == payload.component and row["build"] == payload.build:
+            selected = row
+    source = payload.descriptor["source"]
+    recorded_source = record.get("source")
+    if (selected is None or sha256(canonical(record)) != selected["recordSha256"]
+            or record.get("component") != payload.component or record.get("build") != payload.build
+            or record.get("entry") != selected["entry"] or record.get("status") != "working"
+            or record.get("packageOnly") is not True or record.get("stableCandidate") is not True
+            or record.get("prunedAt") or not isinstance(recorded_source, dict)
+            or recorded_source.get("commit") != source["commit"]
+            or recorded_source.get("uncommittedChanges") is not False
+            or (payload.component in COMPONENTS and record.get("dataFormat") != 2)
+            or selected["descriptorSha256"] != payload.digest
+            or selected["manifestSha256"] != payload.descriptor["payloadManifestSha256"]
+            or selected["source"] != source or not natural(selected["entryMode"])):
+        refuse()
+    entry = contained(payload.root.parent, selected["entry"], regular=True)
+    mode = stat.S_IMODE(entry.lstat().st_mode)
+    if mode != selected["entryMode"] or not mode & 0o111 or _file_hash(entry)[1] != selected["entrySha256"]:
+        refuse()
+    return digest

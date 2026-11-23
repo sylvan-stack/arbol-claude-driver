@@ -20,7 +20,8 @@ from .core import Command, Failure
 from .identity import canonical_id, pending, private_file, root_identity, sidecar, state_format
 from .identity_protocol import (
     Authority, LIMIT, MANIFEST_LIMIT, MAX_ENTRIES, Object, Payload, canonical, canonical_uuid, decode, fields, natural, physical, private_directory,
-    publish, publish_bytes, read, read_bytes, refuse, remove, sha256, sync_directory, valid_hash, valid_token, validate,
+    publish, publish_bytes, read, read_bytes, refuse, registered_payload_root, remove, sha256, sync_directory,
+    valid_hash, valid_token, validate,
 )
 
 from .state import State, owner_alive, parse_owner, prepare_file
@@ -401,7 +402,7 @@ class Maintenance:
         authority = Authority(physical(context['registry']), COMPONENT)
         expected_path = authority.folder / 'sessions' / context['session'] / 'contexts' / (context['attempt'] + '.json')
         if (path != expected_path or payload.component != COMPONENT
-                or payload.root != authority.registry / COMPONENT / payload.build / 'driver-payload'):
+                or payload.root != registered_payload_root(authority.registry, COMPONENT, payload.build)):
             refuse()
         result = cls(authority, payload, context, path, raw, descriptor, command)
         with authority.mutex():
