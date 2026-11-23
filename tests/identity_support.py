@@ -26,7 +26,7 @@ from types import CodeType, TracebackType
 from typing import ClassVar, Literal
 
 from arbol_claude_driver.admission import (
-    Admission, HelperHandoff, boot_uuid, current_admission, normal_context, verify_acceptance,
+    Admission, HelperHandoff, _join_owned, boot_uuid, current_admission, normal_context, verify_acceptance,
 )
 from arbol_claude_driver.identity_protocol import (
     BUILD, DESCRIPTOR, Object, canonical, decode, fields, inspect_process, load_payload, process_identity,
@@ -408,17 +408,34 @@ class ClaudeLocalSubject:
 
     async def spawn(self, operation: str, *arguments: str) -> ClaudeInvocation:
         self.check()
-        child = await asyncio.create_subprocess_exec(
+        spawning = asyncio.create_task(asyncio.create_subprocess_exec(
             *self.prefix, "--state-dir", str(self.state), "subscriptions", operation, *arguments,
             cwd=self.fixture.root.path, env=self.environment, close_fds=True,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        )
-        assert child.stdin is not None
-        child.stdin.close()
-        owner = inspect_process(child.pid)
-        require(owner is not None and owner.parent == os.getpid(), "The provider is no longer our verified child.")
-        assert owner is not None
-        return ClaudeInvocation(child, owner.owner)
+        ))
+        child: asyncio.subprocess.Process | None = None
+        owner: Object | None = None
+        try:
+            child = await asyncio.shield(spawning)
+            assert child.stdin is not None
+            child.stdin.close()
+            observed = inspect_process(child.pid)
+            require(observed is not None and observed.parent == os.getpid(),
+                    "The provider is no longer our verified child.")
+            assert observed is not None
+            owner = observed.owner
+            return ClaudeInvocation(child, owner)
+        except BaseException as original:
+            try:
+                if child is None:
+                    child = await _join_owned(spawning)
+                if child.stdin is not None:
+                    child.stdin.close()
+                cleanup = self.stop(ClaudeInvocation(child, owner)) if owner is not None else self._reap(child)
+                await _join_owned(asyncio.create_task(cleanup))
+            except BaseException as error:
+                original.add_note("Provider spawn cleanup unresolved: " + type(error).__name__)
+            raise
 
     async def stop(self, invocation: ClaudeInvocation) -> None:
         child = invocation.process
@@ -429,7 +446,20 @@ class ClaudeLocalSubject:
                     child.terminate()
                 except ProcessLookupError:
                     pass
-        await asyncio.wait_for(child.wait(), timeout=20)
+        await self._reap(child)
+
+    @staticmethod
+    async def _reap(child: asyncio.subprocess.Process) -> None:
+        async def discard(stream: asyncio.StreamReader) -> None:
+            while await stream.read(4096):
+                pass
+
+        async with asyncio.timeout(20), asyncio.TaskGroup() as group:
+            if child.stdout is not None:
+                group.create_task(discard(child.stdout))
+            if child.stderr is not None:
+                group.create_task(discard(child.stderr))
+            group.create_task(child.wait())
 
     async def collect(self, invocation: ClaudeInvocation, name: str) -> ClaudeCapture:
         child = invocation.process
@@ -479,9 +509,15 @@ class ClaudeLocalSubject:
     async def request(self, evidence: str, operation: str, *arguments: str) -> ClaudeCapture:
         invocation = await self.spawn(operation, *arguments)
         try:
-            return await self.collect(invocation, evidence)
-        finally:
-            await self.stop(invocation)
+            result = await self.collect(invocation, evidence)
+        except BaseException as original:
+            try:
+                await _join_owned(asyncio.create_task(self.stop(invocation)))
+            except BaseException as error:
+                original.add_note("Provider cleanup unresolved: " + type(error).__name__)
+            raise
+        await self.stop(invocation)
+        return result
 
 
 @dataclass
