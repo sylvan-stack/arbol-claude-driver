@@ -191,6 +191,62 @@ class LocalIdentityTests(unittest.TestCase):
         finally:
             subject.close()
 
+    def test_lost_or_corrupt_proof_refuses_without_regeneration(self) -> None:
+        for fault in ("missing-sidecar", "corrupt-sidecar", "missing-root", "corrupt-root"):
+            with self.subTest(fault=fault):
+                asyncio.run(self._lost_or_corrupt_proof(fault))
+
+    async def _lost_or_corrupt_proof(self, fault: str) -> None:
+        subject = ClaudeLocalSubject()
+        try:
+            original = self._proof(await subject.request("proof-before-" + fault, "identity", "anthropic"),
+                                   "anthropic")
+            updated = await subject.request("record-before-" + fault, "update", "anthropic", "--label", "Preserved")
+            self.assertEqual((updated.exit, updated.stderr), (0, b""))
+            self.assertEqual(decode(updated.stdout, exact=False)["label"], "Preserved")
+            folder = subject.state / "subscriptions/anthropic"
+            root = Directory.root(subject.state)
+            subscription = Directory.root(folder)
+            try:
+                record = subscription.read("record.json")
+                guard = os.stat("identity.guard", dir_fd=root.descriptor, follow_symlinks=False)
+                root_before = root.read("identity.json")
+                sidecar_before = subscription.read("identity.json")
+                self.assertEqual(decode(sidecar_before)["witness"], original["witness"])
+                target = subscription if fault.endswith("sidecar") else root
+                os.unlink("identity.json", dir_fd=target.descriptor)
+                os.fsync(target.descriptor)
+                if fault.startswith("corrupt"):
+                    target.exclusive("identity.json", canonical({"version": 1, "invalid": True}))
+                image = subject.image(subject.state)
+                expected = str(original["generation"]) + "." + str(original["witness"])
+                if fault == "missing-sidecar":
+                    self._failure(await subject.request("old-expect-" + fault, "identity", "anthropic",
+                                                        "--expect", expected), "in_use")
+                    fresh = self._proof(await subject.request("new-proof-" + fault, "identity", "anthropic"),
+                                        "anthropic")
+                    self.assertEqual(fresh["generation"], original["generation"])
+                    self.assertNotEqual(fresh["witness"], original["witness"])
+                    self.assertEqual(root.read("identity.json"), root_before)
+                else:
+                    self._failure(await subject.request("identity-refusal-" + fault, "identity", "anthropic"),
+                                  "internal")
+                    self.assertEqual(subject.image(subject.state), image)
+                    if fault.endswith("root"):
+                        self._failure(await subject.request("list-refusal-" + fault, "list"), "internal")
+                        self.assertEqual(subject.image(subject.state), image)
+                    else:
+                        self.assertEqual(root.read("identity.json"), root_before)
+                self.assertEqual(subscription.read("record.json"), record)
+                current_guard = os.stat("identity.guard", dir_fd=root.descriptor, follow_symlinks=False)
+                self.assertEqual((current_guard.st_dev, current_guard.st_ino), (guard.st_dev, guard.st_ino))
+                subject.check()
+            finally:
+                subscription.close()
+                root.close()
+        finally:
+            subject.close()
+
     def _proof(self, capture: ClaudeCapture, selector: str) -> Object:
         self.assertEqual((capture.exit, capture.stderr), (0, b""))
         proof = decode(capture.stdout, exact=False)
