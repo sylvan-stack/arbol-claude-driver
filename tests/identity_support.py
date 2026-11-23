@@ -7,6 +7,7 @@ never a complete check result or permission to maintain a subject.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import os
 import re
@@ -354,10 +355,82 @@ class Fixture:
             raise BaseExceptionGroup("Fixture descriptor cleanup failed.", errors)
 
 
+class _PublicCallCase:
+    def __init__(self, case_id: str, admission: Admission) -> None:
+        self.case_id, self.admission = case_id, admission
+        self.rows: list[Object] = []
+        self.closed = False
+
+    def retain(self, fixture: Fixture, graph: Object, provider: Object, argv: tuple[str, ...],
+               request: tuple[str, ...], code: int, stdout: bytes, stderr: bytes) -> None:
+        require(not self.closed and self.admission is fixture.admission and len(self.rows) < 128
+                and all(previous["invocation"] != graph["invocation"] for previous in self.rows)
+                and code in (0, 1) and not stderr and 0 <= len(stdout) <= 4096,
+                "Public case received a duplicate, late or unclassified child result.")
+        refusal = None
+        if code:
+            decoded = json.loads(stdout)
+            require(isinstance(decoded, dict) and isinstance(decoded.get("error"), dict)
+                    and decoded["error"].get("code") in ("internal", "invalid_input", "in_use", "not_found"),
+                    "Unexpected ordinary Driver refusal.")
+            refusal = decoded["error"]["code"]
+        detail = canonical({"case": self.case_id, "fixture": fixture.case, "invocation": graph["invocation"],
+                            "request": list(request), "stdoutHex": stdout.hex(), "stderrHex": stderr.hex()})
+        fixture.retain("public-" + graph["invocation"] + ".json", detail, limit=32768)
+        self.rows.append({**graph, "fixture": fixture.case, "fixtureOwnerSha256": sha256(fixture.root.read(".fixture-owner.json")),
+            "captureSha256": sha256(detail), "operation": request[0], "argvSha256": sha256(_array_bytes(argv)),
+            "provider": provider, "waitStatus": code, "stdoutSize": len(stdout), "stdoutSha256": sha256(stdout),
+            "stderrSize": len(stderr), "stderrSha256": sha256(stderr), "refusal": refusal, "streams": "closed"})
+
+
+_public_case: contextvars.ContextVar[_PublicCallCase | None] = contextvars.ContextVar("driver_public_case", default=None)
+
+
+def _public_graph(admission: Admission, root: Object, main: Object, owner: Object) -> Object:
+    """Under the original component mutex, bind this direct child's real accepted transfer."""
+    authority = admission.authority
+    handoffs = authority.folder / "handoffs"
+    entries = list(handoffs.iterdir())
+    require(len(entries) <= 4096, "Public handoff inventory exceeds its bound.")
+    transfers = []
+    for path in entries:
+        if path.name.endswith(".json") and not path.name.endswith(".context.json"):
+            transfer = decode(read_bytes(path))
+            validate("handoff", transfer)
+            if transfer["invocation"] == root["invocation"]:
+                require(path.name == transfer["handoff"] + ".json" and valid_token(transfer["handoff"]),
+                        "Ordinary provider handoff name differs.")
+                transfers.append(transfer)
+    require(len(transfers) == 1, "Ordinary invocation has another handoff.")
+    handoff = transfers[0]
+    context_raw = read_bytes(handoffs / (handoff["handoff"] + ".context.json"))
+    context = decode(context_raw)
+    normal_context(context)
+    require(handoff["phase"] == "accepted" and handoff["role"] == "main" and handoff["entry"] == admission.payload.descriptor["entry"]
+            and handoff["child"] == main["writer"] and handoff["parent"] == main["parent"] == root["writer"]
+            and context["handoff"] == handoff["handoff"] and context["writer"] == main["writer"]
+            and context["invocation"] == root["invocation"] == main["invocation"]
+            and context["process"] == {key: main[key] for key in ("pid", "startedAt")}
+            and context["parent"] == {"writer": root["writer"], **owner} and context["nonce"] == handoff["nonce"]
+            and valid_token(handoff.get("challenge")) and context["role"] == "main" and context["entry"] == handoff["entry"]
+            and sha256(context_raw) == handoff["contextSha256"] == main["contextSha256"]
+            and all(context[key] == admission.context[key] for key in (
+                "registry", "registrySha256", "component", "epoch", "boot", "acceptanceSha256", "payloadSha256")),
+            "Ordinary MAIN context differs from the original provider, tuple or registry.")
+    for identity in (owner, context["process"]):
+        current_process = inspect_process(identity["pid"])
+        require(current_process is None or current_process.owner != identity, "Original public writer still exists.")
+    return {"invocation": root["invocation"], "rootWriter": root["writer"], "mainWriter": main["writer"],
+            "handoff": handoff["handoff"], "main": context["process"], "contextSha256": sha256(context_raw),
+            "rootSha256": sha256(canonical(root)), "mainSha256": sha256(canonical(main)), "handoffSha256": sha256(canonical(handoff))}
+
+
 @dataclass(frozen=True)
 class ClaudeInvocation:
     process: asyncio.subprocess.Process
     owner: Object
+    argv: tuple[str, ...]
+    request: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -391,6 +464,7 @@ class ClaudeLocalSubject:
         self.prefix = [*provider.prefix, "--qualification-launch", str(registry), COMPONENT,
                        admission.payload.build, "driver", "--"]
         self.fixture = Fixture.create(admission, uuid.uuid4().hex)
+        self.public_case = _public_case.get()
         self.state = self.fixture.root.path / "state"
         try:
             home = self._child(self.fixture.root, "home")
@@ -452,8 +526,10 @@ class ClaudeLocalSubject:
 
     async def spawn(self, operation: str, *arguments: str) -> ClaudeInvocation:
         self.check()
+        request = (operation, *arguments)
+        argv = (*self.prefix, "--state-dir", str(self.state), "subscriptions", *request)
         spawning = asyncio.create_task(asyncio.create_subprocess_exec(
-            *self.prefix, "--state-dir", str(self.state), "subscriptions", operation, *arguments,
+            *argv,
             cwd=self.fixture.root.path, env=self.environment, close_fds=True,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         ))
@@ -468,14 +544,14 @@ class ClaudeLocalSubject:
                     "The provider is no longer our verified child.")
             assert observed is not None
             owner = observed.owner
-            return ClaudeInvocation(child, owner)
+            return ClaudeInvocation(child, owner, argv, request)
         except BaseException as original:
             try:
                 if child is None:
                     child = await _join_owned(spawning)
                 if child.stdin is not None:
                     child.stdin.close()
-                cleanup = self.stop(ClaudeInvocation(child, owner)) if owner is not None else self._reap(child)
+                cleanup = self.stop(ClaudeInvocation(child, owner, argv, request)) if owner is not None else self._reap(child)
                 await _join_owned(asyncio.create_task(cleanup))
             except BaseException as error:
                 original.add_note("Provider spawn cleanup unresolved: " + type(error).__name__)
@@ -522,13 +598,24 @@ class ClaudeLocalSubject:
             exit_code = group.create_task(child.wait())
         result = ClaudeCapture(exit_code.result(), stdout.result(), stderr.result(), invocation.owner)
         require(self.secret.encode() not in result.stdout + result.stderr, "The fixture sentinel escaped.")
-        self._terminal(result.owner)
+        graph = self._terminal(result.owner)
         self.fixture.retain(name + ".json", canonical({"exit": result.exit, "owner": result.owner,
                             "stdoutHex": result.stdout.hex(), "stderrHex": result.stderr.hex()}), limit=32768)
         self.check()
+        if self.public_case is not None:
+            require(child.pid == result.owner["pid"] and child.returncode == result.exit and child.stdin is not None
+                    and child.stdin.is_closing() and child.stdin.transport.get_extra_info("pipe").closed,
+                    "Original public provider stdin is open or its owned wait differs.")
+            for reader in (child.stdout, child.stderr):
+                transport = getattr(reader, "_transport", None)
+                require(reader.at_eof() and isinstance(transport, asyncio.ReadTransport)
+                        and transport.is_closing() and transport.get_extra_info("pipe").closed,
+                        "Original provider output pipe is still open.")
+            self.public_case.retain(self.fixture, graph, result.owner, invocation.argv, invocation.request,
+                                    result.exit, result.stdout, result.stderr)
         return result
 
-    def _terminal(self, owner: Object) -> None:
+    def _terminal(self, owner: Object) -> Object:
         authority = self.fixture.admission.authority
         with authority.mutex():
             roots = list((authority.folder / "writers").iterdir())
@@ -549,6 +636,7 @@ class ClaudeLocalSubject:
             main = next(row for row in found[0] if row["parent"] is not None)
             require(main["parent"] == root["writer"] and main["invocation"] == root["invocation"],
                     "The local MAIN is not bound to the observed provider.")
+            return _public_graph(self.fixture.admission, root, main, owner)
 
     async def request(self, evidence: str, operation: str, *arguments: str) -> ClaudeCapture:
         invocation = await self.spawn(operation, *arguments)
@@ -2197,6 +2285,7 @@ class ClaudeWholeUnitResult(unittest.TestResult):
         self.phase = phase
         self.index = 0
         self.current: str | None = None
+        self.public_token: contextvars.Token[_PublicCallCase | None] | None = None
         self.issues: list[tuple[str, str]] = []
         self.completed: list[LocalResult] = []
 
@@ -2211,22 +2300,34 @@ class ClaudeWholeUnitResult(unittest.TestResult):
         case = self.case_id(test)
         require(self.current is None and self.index < len(CLAUDE_UNIT_ORDER)
                 and case == CLAUDE_UNIT_ORDER[self.index], "Unexpected whole-unit case order.")
+        require(_public_case.get() is None and self.public_token is None, "A foreign public case is active.")
         self.current = case
         self.index += 1
         super().startTest(test)
+        self.public_token = _public_case.set(_PublicCallCase(case, self.phase.admission))
 
     def addSuccess(self, test: unittest.TestCase) -> None:
         from top.test_top_subscription_identity import H1CaseBinding
         case = self.case_id(test)
         require(case == self.current and self.phase.results is not None, "Unmatched success callback.")
+        public_case = _public_case.get()
+        require(public_case is not None and public_case.case_id == case and not public_case.closed,
+                "Public evidence is outside its original case.")
+        assert public_case is not None
+        public_case.closed = True
         if case == H1_ID:
+            require(not public_case.rows, "The H1 case cannot own an ordinary provider.")
             binding = self.phase.binding
             require(isinstance(binding, H1CaseBinding) and binding.provisional_result is not None
                     and binding.child is not None, "H1 did not return its actual provisional result.")
             assert isinstance(binding, H1CaseBinding) and binding.provisional_result is not None
             result = binding.provisional_result
         else:
-            result = LocalResult(case, "passed", canonical({"version": 1, "kind": "abr38-unittest-success", "id": case}))
+            assert self.phase.fixture is not None
+            calls = canonical({"case": case, "publicCalls": public_case.rows})
+            digest = self.phase.fixture.retain("public-calls-" + sha256(calls) + ".json", calls, limit=1024 * 1024)
+            result = LocalResult(case, "passed", canonical({"version": 1, "kind": "abr38-unittest-success", "id": case,
+                                                          "publicCallsSha256": digest}))
         assert self.phase.results is not None
         self.phase.results.record(result)
         self.completed.append(result)
@@ -2269,8 +2370,17 @@ class ClaudeWholeUnitResult(unittest.TestResult):
                                                                               "callbacks": issues})))
             except BaseException as error:
                 self.issues.append((case, "result-recording-" + type(error).__name__))
-        self.current = None
-        super().stopTest(test)
+        try:
+            super().stopTest(test)
+        finally:
+            require(self.public_token is not None, "Original public case binding is unavailable.")
+            assert self.public_token is not None
+            active = _public_case.get()
+            if active is not None:
+                active.closed = True
+            _public_case.reset(self.public_token)
+            self.public_token = None
+            self.current = None
 
     def complete(self) -> tuple[LocalResult, ...]:
         require(self.current is None and not self.issues and not self.skipped and self.wasSuccessful()
