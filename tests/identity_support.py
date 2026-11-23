@@ -20,10 +20,11 @@ import sys
 import threading
 import time
 import uuid
+import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import CodeType, TracebackType
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from arbol_claude_driver.admission import (
     Admission, HelperHandoff, _join_owned, boot_uuid, current_admission, normal_context, verify_acceptance,
@@ -1736,3 +1737,227 @@ class TerminalCloseScope:
             # The sole owning context ends the Suite. No bootstrap handler,
             # finalizer or outer context gets a post-finish diagnostic chance.
             os._exit(status)
+
+# Prospective full unit order. The future inventory must contain every entry;
+# names for the still-unwritten bodies are pinned here for their source owners.
+CLAUDE_UNIT_ORDER = (
+    "tests/top/test_top_runtime.py::StateTests.test_recovery_never_deletes_or_overwrites_a_newer_run",
+    "tests/top/test_top_runtime.py::TransportTests.test_output_backpressure_uses_one_absolute_stop_deadline",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_two_implicit_captures_contend_and_a_fresh_invocation_accepts_exact_proof",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_legacy_list_keeps_supported_record_and_rejects_retired_aliases",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_interrupted_conversion_refuses_list_and_proof_without_recovering",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_native_refusals_preserve_proof_and_native_state",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_lost_or_corrupt_proof_refuses_without_regeneration",
+    "tests/top/test_top_subscription_identity.py::LocalIdentityTests.test_create_publication_preserves_journal_obligations",
+    "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_record_save",
+    "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_run_and_chat_completion",
+    "tests/top/test_top_subscription_identity.py::LifetimeRaceTests.test_matching_and_displaced_metadata_broker",
+    H1_ID,
+)
+# These are pending duties, not a claim that concrete observers are wired.
+CLAUDE_PENDING_EXTERNAL = ("H1-span-completion", "terminal-close-closure",
+                           "create-publication-recovery", "create-publication-absence")
+
+
+class ClaudeWholeUnitPhase:
+    """Already-admitted whole-unit preparation; the checker retains bootstrap ownership."""
+
+    def __init__(self, admission: Admission, case: str) -> None:
+        self.admission = admission
+        self.case = case
+        self.fixture: Fixture | None = None
+        self.streams: SuiteStreams | None = None
+        self.results: LocalResults | None = None
+        self.binding: object | None = None
+        self.closed = False
+
+    def __enter__(self) -> ClaudeWholeUnitPhase:
+        require(not self.closed and self.fixture is None and current_admission() is self.admission,
+                "The entered checker Admission is required.")
+        context = _suite_current(self.admission)
+        require(context["role"] == "helper" and context["entry"] == "scripts/check_build.py"
+                and sys.argv[1:] == ["unit"]
+                and Path(sys.argv[0]) == self.admission.payload.root / "scripts/check_build.py"
+                and verify_acceptance(self.admission.authority, self.admission.payload,
+                                      context["acceptanceSha256"])["status"] == "candidate",
+                "Only the candidate's actual unit checker can own this phase.")
+        try:
+            self.fixture = Fixture.create(self.admission, self.case)
+            self.results = LocalResults(self.fixture, CLAUDE_UNIT_ORDER, CLAUDE_PENDING_EXTERNAL)
+            self.streams = SuiteStreams.separate(self.fixture)
+            from top.test_top_subscription_identity import H1CaseBinding, HelperSpanTests
+            self.binding = H1CaseBinding(self.fixture, self.results, self.streams)
+            HelperSpanTests.bind(self.binding)
+            require(current_admission() is self.admission, "Checker Admission changed during setup.")
+            return self
+        except BaseException as original:
+            self._cleanup(original)
+            raise
+
+    def _cleanup(self, original: BaseException | None) -> None:
+        self.closed = True
+        failures: list[BaseException] = []
+        if self.binding is not None:
+            from top.test_top_subscription_identity import H1CaseBinding, HelperSpanTests
+            assert isinstance(self.binding, H1CaseBinding)
+            if self.binding.child is not None and not self.binding.child.settled:
+                try:
+                    for note in self.binding.child.abort():
+                        failures.append(SpanFailure(note))
+                except BaseException as error:
+                    failures.append(error)
+            if HelperSpanTests._binding is self.binding:
+                HelperSpanTests._binding = None
+        for resource in (self.streams, self.fixture):
+            if resource is not None:
+                try:
+                    resource.close()
+                except BaseException as error:
+                    failures.append(error)
+        if failures:
+            if original is not None:
+                for failure in failures:
+                    original.add_note("Claude phase cleanup: " + repr(failure))
+            else:
+                raise BaseExceptionGroup("Claude phase cleanup failed.", failures)
+
+    def __exit__(self, kind: type[BaseException] | None, error: BaseException | None,
+                 trace: TracebackType | None) -> None:
+        if not self.closed:
+            self._cleanup(error)
+
+    def continue_h1(self) -> H1Child:
+        from top.test_top_subscription_identity import H1CaseBinding
+        require(not self.closed and current_admission() is self.admission
+                and self.results is not None and self.streams is not None
+                and isinstance(self.binding, H1CaseBinding), "The actual admitted phase is unavailable.")
+        assert self.results is not None and self.streams is not None
+        assert isinstance(self.binding, H1CaseBinding)
+        child = self.binding.child
+        require(child is not None and self.binding.provisional_result is not None
+                and self.results.rows[-1]["localStatus"] == "h1-preconditions-done",
+                "Actual H1 callback and preconditions are missing.")
+        assert child is not None
+        child.publish_and_continue(self.results, self.streams)
+        require(child.settled and child.reaped and child.endpoints_closed and child.child.returncode == 0,
+                "Actual H1 completion and reap are incomplete.")
+        return child
+
+    def terminal_scope(self) -> TerminalCloseScope:
+        from top.test_top_subscription_identity import H1CaseBinding
+        require(not self.closed and current_admission() is self.admission
+                and self.fixture is not None and self.results is not None and self.streams is not None
+                and isinstance(self.binding, H1CaseBinding), "The admitted phase is unavailable.")
+        assert self.fixture is not None and self.results is not None and self.streams is not None
+        assert isinstance(self.binding, H1CaseBinding)
+        child = self.binding.child
+        require(child is not None and child.settled and child.reaped and child.endpoints_closed,
+                "Terminal scope requires the actual settled H1 helper.")
+        assert child is not None
+        return TerminalCloseScope(self.fixture, self.results, self.streams, child)
+
+class ClaudeWholeUnitResult(unittest.TestResult):
+    """Record actual unittest callbacks; never infer success from a child exit."""
+
+    def __init__(self, phase: ClaudeWholeUnitPhase) -> None:
+        super().__init__()
+        require(phase.results is not None and not phase.closed, "Entered whole-unit phase required.")
+        self.phase = phase
+        self.index = 0
+        self.current: str | None = None
+        self.issues: list[tuple[str, str]] = []
+        self.completed: list[LocalResult] = []
+
+    @staticmethod
+    def case_id(test: unittest.TestCase) -> str:
+        parts = test.id().split(".")
+        require(len(parts) >= 3 and parts[-3] in ("test_top_runtime", "test_top_subscription_identity"),
+                "Unrecognized whole-unit callback.")
+        return "tests/top/" + parts[-3] + ".py::" + parts[-2] + "." + parts[-1]
+
+    def startTest(self, test: unittest.TestCase) -> None:
+        case = self.case_id(test)
+        require(self.current is None and self.index < len(CLAUDE_UNIT_ORDER)
+                and case == CLAUDE_UNIT_ORDER[self.index], "Unexpected whole-unit case order.")
+        self.current = case
+        self.index += 1
+        super().startTest(test)
+
+    def addSuccess(self, test: unittest.TestCase) -> None:
+        from top.test_top_subscription_identity import H1CaseBinding
+        case = self.case_id(test)
+        require(case == self.current and self.phase.results is not None, "Unmatched success callback.")
+        if case == H1_ID:
+            binding = self.phase.binding
+            require(isinstance(binding, H1CaseBinding) and binding.provisional_result is not None
+                    and binding.child is not None, "H1 did not return its actual provisional result.")
+            assert isinstance(binding, H1CaseBinding) and binding.provisional_result is not None
+            result = binding.provisional_result
+        else:
+            result = LocalResult(case, "passed", canonical({"version": 1, "kind": "abr38-unittest-success", "id": case}))
+        assert self.phase.results is not None
+        self.phase.results.record(result)
+        self.completed.append(result)
+        super().addSuccess(test)
+
+    def addError(self, test: Any, err: Any) -> None:
+        super().addError(test, err)
+        self.issues.append((self.current or str(test), "error"))
+
+    def addFailure(self, test: Any, err: Any) -> None:
+        super().addFailure(test, err)
+        self.issues.append((self.current or str(test), "failure"))
+
+    def addSkip(self, test: Any, reason: str) -> None:
+        super().addSkip(test, reason)
+        self.issues.append((self.current or str(test), "skipped"))
+
+    def addSubTest(self, test: Any, subtest: Any, err: Any) -> None:
+        super().addSubTest(test, subtest, err)
+        if err is not None:
+            self.issues.append((self.current or str(test), "subtest"))
+
+    def addExpectedFailure(self, test: Any, err: Any) -> None:
+        super().addExpectedFailure(test, err)
+        self.issues.append((self.current or str(test), "expected-failure"))
+
+    def addUnexpectedSuccess(self, test: Any) -> None:
+        super().addUnexpectedSuccess(test)
+        self.issues.append((self.current or str(test), "unexpected-success"))
+
+    def stopTest(self, test: unittest.TestCase) -> None:
+        case = self.case_id(test)
+        require(case == self.current and self.phase.results is not None, "Unmatched case completion.")
+        assert self.phase.results is not None
+        issues = [kind for identity, kind in self.issues if identity == case]
+        if issues:
+            status = "skipped" if all(kind == "skipped" for kind in issues) else "failed"
+            try:
+                self.phase.results.record(LocalResult(case, status, canonical({"version": 1, "id": case,
+                                                                              "callbacks": issues})))
+            except BaseException as error:
+                self.issues.append((case, "result-recording-" + type(error).__name__))
+        self.current = None
+        super().stopTest(test)
+
+    def complete(self) -> tuple[LocalResult, ...]:
+        require(self.current is None and not self.issues and not self.skipped and self.wasSuccessful()
+                and tuple(row.case_id for row in self.completed) == CLAUDE_UNIT_ORDER,
+                "Whole-unit callbacks are incomplete or unsuccessful.")
+        return tuple(self.completed)
+
+    def after_h1(self) -> tuple[LocalResult, ...]:
+        from top.test_top_subscription_identity import H1CaseBinding, _images
+        before = self.complete()
+        child = self.phase.continue_h1()
+        binding = self.phase.binding
+        assert isinstance(binding, H1CaseBinding) and binding.provisional_result is not None
+        assert binding.provisional_result.evidence is not None
+        provisional = _document(binding.provisional_result.evidence)
+        observed = {name: sha256(raw) for name, raw in _images(binding.fixture).items()}
+        require(provisional["before"] == provisional["after"] == observed,
+                "H1 local state changed after actual helper completion.")
+        evidence = canonical({"version": 1, "kind": "abr38-h1-local-complete", "id": H1_ID,
+                              "preconditionsSha256": sha256(binding.provisional_result.evidence),
+                              "after": observed, "exit": child.child.returncode})
+        return (*before[:-1], LocalResult(H1_ID, "passed", evidence))
