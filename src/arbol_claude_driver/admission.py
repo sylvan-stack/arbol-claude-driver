@@ -138,7 +138,7 @@ def verify_acceptance(authority: Authority, payload: Payload, acceptance_digest:
         refuse()
     if acceptance['status'] == 'candidate' and authority.registry == installed_registry():
         refuse()
-    registration = verify_installed_registration(authority.registry, payload)
+    registered_provider = verify_installed_registration(authority.registry, payload)
     gate_raw = read_bytes(authority.shared / 'gate.json')
     gate = decode(gate_raw)
     fields(gate, 'version kind providerPayloadSha256 components')
@@ -181,7 +181,7 @@ def verify_acceptance(authority: Authority, payload: Payload, acceptance_digest:
         descriptor_raw = read_bytes(descriptor)
         if sha256(descriptor_raw) == gate['providerPayloadSha256']:
             provider = load_payload(root, 'arbol', build_folder.name)
-            if verify_installed_registration(authority.registry, provider) != registration:
+            if verify_installed_registration(authority.registry, provider) != registered_provider:
                 refuse()
             matched += 1
     if matched != 1:

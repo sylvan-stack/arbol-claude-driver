@@ -768,8 +768,8 @@ def registered_payload_root(registry: Path, component: str, build: str) -> Path:
     return registry / component / build / SUBTREE
 
 
-def verify_installed_registration(registry: Path, payload: Payload) -> str | None:
-    """Bind an installed payload to the committed five-package registration."""
+def verify_installed_registration(registry: Path, payload: Payload) -> Object | None:
+    """Verify an installed payload and return its cohort's exact provider row."""
     if payload.root != registered_payload_root(registry, payload.component, payload.build):
         refuse()
     if registry != installed_registry():
@@ -795,7 +795,7 @@ def verify_installed_registration(registry: Path, payload: Payload) -> str | Non
             or group["scope"] != str(registry) or not isinstance(builds, list) or len(builds) != len(expected)):
         refuse()
 
-    selected = None
+    selected = provider = None
     row_fields = set("component build source manifestSha256 descriptorSha256 recordSha256 entry entrySha256 entryMode candidate".split())
     for name, row in zip(expected, builds, strict=True):
         if (not isinstance(row, dict) or set(row) != row_fields or row["component"] != name
@@ -805,6 +805,8 @@ def verify_installed_registration(registry: Path, payload: Payload) -> str | Non
             refuse()
         if name == payload.component and row["build"] == payload.build:
             selected = row
+        if name == "arbol":
+            provider = row
     source = payload.descriptor["source"]
     recorded_source = record.get("source")
     if (selected is None or sha256(canonical(record)) != selected["recordSha256"]
@@ -823,4 +825,4 @@ def verify_installed_registration(registry: Path, payload: Payload) -> str | Non
     mode = stat.S_IMODE(entry.lstat().st_mode)
     if mode != selected["entryMode"] or not mode & 0o111 or _file_hash(entry)[1] != selected["entrySha256"]:
         refuse()
-    return digest
+    return provider
