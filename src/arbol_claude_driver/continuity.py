@@ -11,10 +11,10 @@ import uuid
 from pathlib import Path
 
 from .core import Failure, Record, compact, fixed_wait, now
-from .history import digest, encode_folder, message_digest, session_lines
+from .history import digest, message_digest
 from .processes import end_run_groups
 from .identity_protocol import sync_directory
-from .state import State, atomic_write, durable_delete, owner_alive, parse_owner, prepare_file, process_owner, read_json, write_json
+from .state import State, durable_delete, owner_alive, parse_owner, prepare_file, process_owner, read_json, write_json
 
 
 def same_reservation(current: Record, expected: Record) -> bool:
@@ -197,7 +197,7 @@ class Chats:
             if self.state.identity is not None and not self.state.identity.matches(request['subscriptionId'], lifetime):
                 raise Failure('in_use', 'The Subscription lifetime changed before continuity reservation.')
             active = await runs.list(False)
-            plan: Record = {'continuity': 'rebuilt' if request['history'] else 'fresh', 'conversation': str(uuid.uuid4()), 'resume': False, 'textForm': False, **({'identity': lifetime} if lifetime is not None else {})}
+            plan: Record = {'continuity': 'rebuilt' if request['history'] else 'fresh', 'conversation': str(uuid.uuid4()), 'resume': False, 'textForm': bool(request['history']), **({'identity': lifetime} if lifetime is not None else {})}
             if request['history']:
                 key = digest(request['chatSessionId']) if request.get('chatSessionId') and request.get('workingDirectory') is not None else None
                 entry = self.entry(request['subscriptionId'], key) if key else None
@@ -212,41 +212,9 @@ class Chats:
                     plan['rebuildReason'] = reason
                 else:
                     assert entry is not None
-                    plan.update(continuity='resumed', resume=True, conversation=entry['conversation'], continuedConversation=entry['conversation'])
+                    plan.update(continuity='resumed', resume=True, textForm=False, conversation=entry['conversation'], continuedConversation=entry['conversation'])
             record = await runs.reserve(request, plan['conversation'], plan.get('continuedConversation'), lifetime=lifetime)
             return plan, record
-
-    async def prepare(self, plan: Record, request: Record, home: Path, cwd: str) -> None:
-        async with self.state.lock(request['subscriptionId'], allow_pending=True):
-            if self.state.identity is not None and not self.state.identity.matches(request['subscriptionId'], plan.get('identity')):
-                raise Failure('in_use', 'The Subscription lifetime changed before conversation preparation.')
-            self._prepare(plan, request, home, cwd)
-
-    async def discard_synthetic(self, plan: Record, request: Record) -> None:
-        if not plan.get('syntheticFile'):
-            return
-        async with self.state.lock(request['subscriptionId'], allow_pending=True):
-            if self.state.identity is None or self.state.identity.matches(request['subscriptionId'], plan.get('identity')):
-                Path(plan['syntheticFile']).unlink(missing_ok=True)
-
-    def _prepare(self, plan: Record, request: Record, home: Path, cwd: str) -> None:
-        if plan['continuity'] != 'rebuilt':
-            return
-        folder = encode_folder(cwd)
-        if len(folder) > 200:
-            projects = home / 'projects'
-            candidates = sorted([entry.name for entry in projects.iterdir() if entry.is_dir() and entry.name.startswith(folder[:200])]) if projects.is_dir() else []
-            if not candidates:
-                plan['textForm'] = True
-                return
-            folder = candidates[0]
-        file = home / 'projects' / folder / (plan['conversation'] + '.jsonl')
-        try:
-            atomic_write(file, '\n'.join(compact(line) for line in session_lines(request['history'], plan['conversation'], cwd)) + '\n')
-        except OSError:
-            plan['textForm'] = True
-            return
-        plan.update(syntheticFile=str(file), resume=True)
 
     async def settle(self, request: Record, plan: Record, fingerprint: Record, completed: bool, home: Path) -> None:
         if not request.get('chatSessionId') or request.get('workingDirectory') is None:

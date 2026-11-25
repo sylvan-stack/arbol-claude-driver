@@ -8,7 +8,6 @@ import shutil
 import signal
 import time
 import uuid
-from pathlib import Path
 
 from .continuity import Chats, Runs
 from .core import Command, Env, Failure, Record, compact, fixed_wait, redact, safe_text, loads
@@ -99,9 +98,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         if len(system_prompt.encode('utf-8')) >= 64 * 1024:
             system_prompt_path = temp / 'system-prompt.txt'
             atomic_write(system_prompt_path, system_prompt)
-        cwd = request.get('workingDirectory', str(temp / 'work'))
-        if request.get('workingDirectory') is None:
-            private_directory(Path(cwd))
+        cwd = request['workingDirectory']
         # The subscription's clean environment excludes inherited Arbol identity.
         child_env = await subscriptions.environment(initial['id'], env, lifetime=lifetime)
         if request.get('arbolChat') is True:
@@ -112,7 +109,6 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         launcher = run_launcher(temp, broker)
         if request['searchPath']:
             child_env['PATH'] = child_env.get('PATH', '') + os.pathsep + os.pathsep.join(request['searchPath'])
-        await chats.prepare(plan, request, home, cwd)
         for attempt in range(2):
             arguments = run_arguments(
                 request, plan['conversation'], command.options.get('control') is True, plan['resume'],
@@ -354,8 +350,6 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
         if control_task:
             control_task.cancel()
             await asyncio.gather(control_task, return_exceptions=True)
-        if request.get('workingDirectory') is None and plan.get('syntheticFile'):
-            await chats.discard_synthetic(plan, request)
         if broker is not None:
             try:
                 await broker.close(deadline=stop_deadline)

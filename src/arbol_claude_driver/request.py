@@ -118,8 +118,7 @@ async def read_request(command: Command, settings: Record, first_line: Callable[
     for path in ([cwd] if cwd is not None else []) + value['additionalDirectories']:
         if not Path(path).is_absolute() or not Path(path).is_dir():
             bad('A working or additional directory does not exist.')
-    if cwd is not None:
-        value['workingDirectory'] = str(Path(cwd).resolve())
+    value['workingDirectory'] = str(Path(cwd).resolve() if cwd is not None else Path.cwd())
     if 'limits' in value and (not isinstance(value['limits'], dict) or any(key not in {'idleSeconds', 'totalSeconds'} or not number(item) or item < 0 for key, item in value['limits'].items())):
         bad('Invalid run limits.')
     return ValidatedRequest(identifier, subscription, cast(Literal['all', 'none'], tools), history, message, value)
@@ -131,8 +130,6 @@ def run_arguments(request: Record, conversation: str, control: bool, resume: boo
         args += ['--tools', '']
     elif control:
         args += ['--permission-prompt-tool', 'stdio']
-    if request.get('workingDirectory') is None:
-        args.append('--no-session-persistence')
     for option, field in [('--model', 'model'), ('--effort', 'effort')]:
         if field in request:
             args += [option, request[field]]
