@@ -14,7 +14,7 @@ from .continuity import Chats, Runs
 from .core import Command, Env, Failure, Record, compact, fixed_wait, redact, safe_text, loads
 from .metadata import Broker
 from .history import MessageDigest, text_history
-from .processes import close_pipes, end_run_groups, inspect_tool, kill_group, require_tool, run_launchers, spawn, wait_exit
+from .processes import close_pipes, end_run_groups, inspect_tool, kill_group, require_tool, run_launcher, spawn, wait_exit
 from .protocol import RunEvents, RunProtocol, exit_failure
 from .request import read_request, run_arguments, user_record
 from .state import atomic_write, private_directory, process_owner
@@ -109,8 +109,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
             if 'cueContext' in request:
                 child_env['ARBOL_DISABLED_HOOK_FEATURES'] = 'cue-card-injection'
         broker = await Broker.start(subscriptions.state, initial['id'], record)
-        launcher, shell = run_launchers(temp, env, broker)
-        child_env.update(CLAUDE_CODE_SHELL=str(shell), CLAUDE_CODE_DISABLE_AUTO_MEMORY='1', BASH_DEFAULT_TIMEOUT_MS='300000', BASH_MAX_TIMEOUT_MS='1800000', CLAUDE_CODE_MAX_RETRIES='3')
+        launcher = run_launcher(temp, broker)
         if request['searchPath']:
             child_env['PATH'] = child_env.get('PATH', '') + os.pathsep + os.pathsep.join(request['searchPath'])
         await chats.prepare(plan, request, home, cwd)
@@ -146,7 +145,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
                     except (BrokenPipeError, ConnectionResetError):
                         raise Failure('tool_failed', 'Claude input closed.') from None
 
-            protocol = RunProtocol(events, request, build, tool['version'], initial['family'], send, plan, command.options.get('control') is True)
+            protocol = RunProtocol(events, dict(request), build, tool['version'], initial['family'], send, plan, command.options.get('control') is True)
             active = protocol
 
             async def stderr_reader() -> None:
@@ -258,7 +257,7 @@ async def run(command: Command, subscriptions: Subscriptions, events: RunEvents,
                             if request.get('effort') and answer['applied'].get('effort') != request['effort']:
                                 raise Failure('invalid_input', 'Claude did not apply the requested effort.')
                             if isinstance(answer['applied'].get('effort'), str):
-                                request['effort'] = answer['applied']['effort']
+                                protocol.request['effort'] = answer['applied']['effort']
                             if not cancelled and not cancel.is_set():
                                 await send(user_record({**request, 'input': {'role': 'user', **text_history(request['history'], request['input'])}} if plan['textForm'] else request))
                                 prompt_sent = True

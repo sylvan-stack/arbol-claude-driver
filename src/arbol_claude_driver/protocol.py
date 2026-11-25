@@ -376,9 +376,9 @@ class RunProtocol:
                 await self.events.emit({'type': 'ask_opened', 'askId': identifier, 'ask': {'callId': request['tool_use_id'], 'questions': questions}})
             elif request.get('subtype') == 'can_use_tool':
                 question = request.get('tool_name') == 'AskUserQuestion'
-                allow = not question and isinstance(request.get('tool_name'), str) and bool(request['tool_name']) and isinstance(request.get('input'), dict)
-                message = 'Nobody is there to answer questions in this run.' if question else 'An unexpected permission request was approved.' if allow else 'An unusable permission request was declined.'
-                await self.send({'type': 'control_response', 'response': {'subtype': 'success', 'request_id': identifier, 'response': {'behavior': 'allow', 'updatedInput': request['input']} if allow else {'behavior': 'deny', 'message': 'Nobody is there to answer questions in this run.' if question else 'The permission request has no usable tool name or input.'}}})
+                message = ('Nobody is there to answer questions in this run.' if question
+                           else 'Claude Code requires approval and this run has no permission approval channel.')
+                await self.send({'type': 'control_response', 'response': {'subtype': 'success', 'request_id': identifier, 'response': {'behavior': 'deny', 'message': message}}})
                 await emit({'type': 'notice', 'code': 'question_unavailable' if question else 'permission_answered', 'message': message})
             else:
                 await self.send({'type': 'control_response', 'response': {'subtype': 'error', 'request_id': identifier, 'error': 'Unknown control request.'}})

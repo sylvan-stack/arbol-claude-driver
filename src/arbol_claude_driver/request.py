@@ -75,7 +75,6 @@ async def read_request(command: Command, settings: Record, first_line: Callable[
     subscription = value.get('subscriptionId', settings.get('defaultSubscription', 'anthropic'))
     if not isinstance(subscription, str) or not subscription:
         bad('Invalid subscription identifier.')
-    defaults = settings.get('subscriptions', {}).get(subscription, {})
     identifier = value.get('runId', str(uuid.uuid4()))
     if not re.fullmatch('[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}', identifier):
         bad('The run identifier is not a safe file name.')
@@ -123,12 +122,11 @@ async def read_request(command: Command, settings: Record, first_line: Callable[
         value['workingDirectory'] = str(Path(cwd).resolve())
     if 'limits' in value and (not isinstance(value['limits'], dict) or any(key not in {'idleSeconds', 'totalSeconds'} or not number(item) or item < 0 for key, item in value['limits'].items())):
         bad('Invalid run limits.')
-    fields = {**value, **({'model': defaults['defaultModel']} if 'model' not in value and 'defaultModel' in defaults else {}), **({'effort': defaults['defaultEffort']} if 'effort' not in value and 'defaultEffort' in defaults else {})}
-    return ValidatedRequest(identifier, subscription, cast(Literal['all', 'none'], tools), history, message, fields)
+    return ValidatedRequest(identifier, subscription, cast(Literal['all', 'none'], tools), history, message, value)
 
 
 def run_arguments(request: Record, conversation: str, control: bool, resume: bool = False, *, system_prompt_path: Path | None = None) -> list[str]:
-    args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'bypassPermissions', '--system-prompt-snapshot', 'off', '--resume' if resume else '--session-id', conversation]
+    args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--resume' if resume else '--session-id', conversation]
     if request['tools'] == 'none':
         args += ['--tools', '']
     elif control:

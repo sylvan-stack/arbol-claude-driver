@@ -177,17 +177,12 @@ def require_tool(tool: Record) -> str:
     return str(tool['path'])
 
 
-def run_launchers(folder: Path, env: Env, broker: Broker) -> tuple[Path, Path]:
+def run_launcher(folder: Path, broker: Broker) -> Path:
     private_directory(folder)
-    candidate = env.get('SHELL', '')
-    real = candidate if Path(candidate).name in {'bash', 'zsh'} else '/bin/zsh'
-    shell = folder / Path(real).name
-    python_launcher(shell, broker.notification_code('shell') +
-                    f'os.environ["SHELL"]={real!r}\nos.execv({real!r},[{real!r},*sys.argv[1:]])\n')
     launcher = folder / 'launch-tool'
     python_launcher(launcher, broker.notification_code('tool') +
                     'if len(sys.argv)<2: raise SystemExit(1)\nos.execv(sys.argv[1],sys.argv[1:])\n')
-    return launcher, shell
+    return launcher
 
 
 def noted_owners(path: Path) -> list[Record]:

@@ -220,7 +220,10 @@ class Subscriptions:
         await self.get(identifier)
         if lifetime is not None and not self.matches(identifier, lifetime):
             raise Failure('in_use', 'The Subscription lifetime changed before environment preparation.')
-        return clean_environment(inherited, ACTUAL_HOME)
+        native_env = clean_environment(inherited, ACTUAL_HOME)
+        if 'SHELL' in inherited:
+            native_env['SHELL'] = inherited['SHELL']
+        return native_env
 
     async def run_report(self, initial: Record, failure: Record | None = None, usage: Record | None = None, *, lifetime: Record | None = None) -> None:
         if (failure or {}).get('code') != 'credential_rejected' and not usage:
@@ -426,7 +429,7 @@ class Authentication:
         child = None
         try:
             env = await self.subscriptions.environment(identifier, self.env, lifetime=lifetime)
-            child = await spawn(program, ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions'], {**env, 'CLAUDE_CODE_DISABLE_AUTO_MEMORY': '1'}, str(self.subscriptions.folder()))
+            child = await spawn(program, ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'], env, Path.cwd())
             assert child.stdin and child.stdout and child.stderr
             drain = asyncio.create_task(child.stderr.read())
             child.stdin.write((compact({'type': 'control_request', 'request_id': 'catalog', 'request': {'subtype': 'initialize'}}) + '\n').encode())
